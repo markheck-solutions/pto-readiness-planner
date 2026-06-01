@@ -24,6 +24,7 @@ async function main() {
           coverageRequirements: demoSeedDataset.coverageRequirements.length,
           criticalWindows: demoSeedDataset.criticalWindows.length,
           existingAbsences: demoSeedDataset.existingAbsences.length,
+          fairnessHistory: demoSeedDataset.fairnessHistory.length,
           ptoRequests: demoSeedDataset.ptoRequests.length,
           scenarios: demoSeedDataset.scenarios.length,
         },

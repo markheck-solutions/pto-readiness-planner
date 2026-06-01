@@ -80,9 +80,23 @@ export function getSchemaBootstrapSql(): string[] {
       requested_start_date DATE NOT NULL,
       requested_end_date DATE NOT NULL,
       request_type TEXT NOT NULL,
+      status TEXT NOT NULL,
       submitted_at TIMESTAMPTZ NOT NULL,
       employee_note TEXT NOT NULL,
       manager_context TEXT NOT NULL
+    );
+    `.trim(),
+    // Schema upgrades for existing demo databases.
+    `ALTER TABLE ${DEMO_SCHEMA}.pto_requests ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'pending';`,
+    `
+    CREATE TABLE IF NOT EXISTS ${DEMO_SCHEMA}.fairness_history (
+      id TEXT PRIMARY KEY,
+      employee_id TEXT NOT NULL REFERENCES ${DEMO_SCHEMA}.employees(id),
+      as_of_date DATE NOT NULL,
+      recent_approved_time_off_count INTEGER NOT NULL,
+      recent_peak_window_coverage_count INTEGER NOT NULL,
+      typical_notice_days INTEGER NOT NULL,
+      note TEXT NOT NULL
     );
     `.trim(),
     `
@@ -114,6 +128,7 @@ export async function seedDemoDataset(db: Queryable): Promise<DemoSeedResult> {
   // Delete-first avoids duplicates and keeps re-seeding safe.
   await db.query(`DELETE FROM ${DEMO_SCHEMA}.seed_scenarios;`);
   await db.query(`DELETE FROM ${DEMO_SCHEMA}.pto_requests;`);
+  await db.query(`DELETE FROM ${DEMO_SCHEMA}.fairness_history;`);
   await db.query(`DELETE FROM ${DEMO_SCHEMA}.existing_absences;`);
   await db.query(`DELETE FROM ${DEMO_SCHEMA}.critical_windows;`);
   await db.query(`DELETE FROM ${DEMO_SCHEMA}.coverage_requirements;`);
@@ -172,17 +187,35 @@ export async function seedDemoDataset(db: Queryable): Promise<DemoSeedResult> {
     );
   }
 
+  for (const f of demoSeedDataset.fairnessHistory) {
+    await db.query(
+      `INSERT INTO ${DEMO_SCHEMA}.fairness_history
+         (id, employee_id, as_of_date, recent_approved_time_off_count, recent_peak_window_coverage_count, typical_notice_days, note)
+       VALUES ($1, $2, $3, $4, $5, $6, $7);`,
+      [
+        f.id,
+        f.employeeId,
+        f.asOfDate,
+        f.recentApprovedTimeOffCount,
+        f.recentPeakWindowCoverageCount,
+        f.typicalNoticeDays,
+        f.note,
+      ],
+    );
+  }
+
   for (const r of demoSeedDataset.ptoRequests) {
     await db.query(
       `INSERT INTO ${DEMO_SCHEMA}.pto_requests
-         (id, employee_id, requested_start_date, requested_end_date, request_type, submitted_at, employee_note, manager_context)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8);`,
+         (id, employee_id, requested_start_date, requested_end_date, request_type, status, submitted_at, employee_note, manager_context)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);`,
       [
         r.id,
         r.employeeId,
         r.requestedStartDate,
         r.requestedEndDate,
         r.requestType,
+        r.status,
         r.submittedAt,
         r.employeeNote,
         r.managerContext,
@@ -236,6 +269,7 @@ export async function seedDemoDataset(db: Queryable): Promise<DemoSeedResult> {
       coverageRequirements: demoSeedDataset.coverageRequirements.length,
       criticalWindows: demoSeedDataset.criticalWindows.length,
       existingAbsences: demoSeedDataset.existingAbsences.length,
+      fairnessHistory: demoSeedDataset.fairnessHistory.length,
       ptoRequests: demoSeedDataset.ptoRequests.length,
       scenarios: demoSeedDataset.scenarios.length,
     },

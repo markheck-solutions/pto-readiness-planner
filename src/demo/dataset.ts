@@ -47,12 +47,17 @@ export type DemoExistingAbsence = {
   note: string;
 };
 
+export type DemoRequestType = "pto" | "training";
+
+export type DemoRequestStatus = "pending" | "approved" | "withdrawn";
+
 export type DemoPtoRequest = {
   id: string;
   employeeId: string;
   requestedStartDate: string; // YYYY-MM-DD
   requestedEndDate: string; // YYYY-MM-DD
-  requestType: "pto";
+  requestType: DemoRequestType;
+  status: DemoRequestStatus;
   submittedAt: string; // ISO
   employeeNote: string;
   managerContext: string;
@@ -77,7 +82,17 @@ export type DemoSeedScenario = {
   note: string;
 };
 
-export const DEMO_DATASET_VERSION = "2026-06-01-demo-v1";
+export type DemoFairnessHistory = {
+  id: string;
+  employeeId: string;
+  asOfDate: string; // YYYY-MM-DD
+  recentApprovedTimeOffCount: number;
+  recentPeakWindowCoverageCount: number;
+  typicalNoticeDays: number;
+  note: string;
+};
+
+export const DEMO_DATASET_VERSION = "2026-06-01-demo-v2";
 
 export const DEMO_FICTIONAL_NOTICE =
   "Fictional demo data only. No login. No HR system connection.";
@@ -265,6 +280,7 @@ export const demoPtoRequests: DemoPtoRequest[] = [
     requestedStartDate: "2026-06-24",
     requestedEndDate: "2026-06-28",
     requestType: "pto",
+    status: "pending",
     submittedAt: "2026-06-10T15:20:00.000Z",
     employeeNote: "Planned PTO with advance notice.",
     managerContext: "Overlaps release cut week; confirm backup coverage and handoffs.",
@@ -275,10 +291,23 @@ export const demoPtoRequests: DemoPtoRequest[] = [
     requestedStartDate: "2026-07-01",
     requestedEndDate: "2026-07-03",
     requestType: "pto",
+    status: "pending",
     submittedAt: "2026-06-28T10:05:00.000Z",
     employeeNote: "Short absence request.",
     managerContext:
       "Single-person escalation role during a freeze window. Needs reschedule or coverage plan.",
+  },
+  {
+    id: "REQ-1002A",
+    employeeId: "emp_taylor_nguyen",
+    requestedStartDate: "2026-06-18",
+    requestedEndDate: "2026-06-18",
+    requestType: "training",
+    status: "approved",
+    submittedAt: "2026-06-01T09:00:00.000Z",
+    employeeNote: "One day training.",
+    managerContext:
+      "Already approved. Short training block that should not change coverage risk.",
   },
   {
     id: "REQ-1003",
@@ -286,6 +315,7 @@ export const demoPtoRequests: DemoPtoRequest[] = [
     requestedStartDate: "2026-07-15",
     requestedEndDate: "2026-07-19",
     requestType: "pto",
+    status: "pending",
     submittedAt: "2026-06-29T19:40:00.000Z",
     employeeNote: "Planned PTO outside critical windows.",
     managerContext: "No overlaps. Coverage stays above minimum for delivery analyst role.",
@@ -296,10 +326,86 @@ export const demoPtoRequests: DemoPtoRequest[] = [
     requestedStartDate: "2026-07-01",
     requestedEndDate: "2026-07-03",
     requestType: "pto",
+    status: "pending",
     submittedAt: "2026-06-25T13:00:00.000Z",
     employeeNote: "PTO request during a busy week.",
     managerContext:
       "Overlaps an existing support lead absence. Coverage drops below requirement; discuss alternatives.",
+  },
+];
+
+export const demoFairnessHistory: DemoFairnessHistory[] = [
+  {
+    id: "fair_avery_park",
+    employeeId: "emp_avery_park",
+    asOfDate: "2026-06-17",
+    recentApprovedTimeOffCount: 0,
+    recentPeakWindowCoverageCount: 2,
+    typicalNoticeDays: 14,
+    note: "Typically provides early notice and covers peak-week handoffs.",
+  },
+  {
+    id: "fair_morgan_lee",
+    employeeId: "emp_morgan_lee",
+    asOfDate: "2026-06-17",
+    recentApprovedTimeOffCount: 1,
+    recentPeakWindowCoverageCount: 1,
+    typicalNoticeDays: 10,
+    note: "Has shared peak-week coordination coverage recently.",
+  },
+  {
+    id: "fair_jordan_kim",
+    employeeId: "emp_jordan_kim",
+    asOfDate: "2026-06-17",
+    recentApprovedTimeOffCount: 1,
+    recentPeakWindowCoverageCount: 2,
+    typicalNoticeDays: 6,
+    note: "Often covers escalation rotation during higher volume periods.",
+  },
+  {
+    id: "fair_casey_patel",
+    employeeId: "emp_casey_patel",
+    asOfDate: "2026-06-17",
+    recentApprovedTimeOffCount: 1,
+    recentPeakWindowCoverageCount: 1,
+    typicalNoticeDays: 12,
+    note: "Support lead rotation contributions have been balanced recently.",
+  },
+  {
+    id: "fair_taylor_nguyen",
+    employeeId: "emp_taylor_nguyen",
+    asOfDate: "2026-06-17",
+    recentApprovedTimeOffCount: 2,
+    recentPeakWindowCoverageCount: 1,
+    typicalNoticeDays: 9,
+    note: "Has taken some time off recently and has also covered peak windows.",
+  },
+  {
+    id: "fair_sam_rivera",
+    employeeId: "emp_sam_rivera",
+    asOfDate: "2026-06-17",
+    recentApprovedTimeOffCount: 0,
+    recentPeakWindowCoverageCount: 1,
+    typicalNoticeDays: 16,
+    note: "Generally requests with long lead time and covers handoffs.",
+  },
+  {
+    id: "fair_riley_chen",
+    employeeId: "emp_riley_chen",
+    asOfDate: "2026-06-17",
+    recentApprovedTimeOffCount: 1,
+    recentPeakWindowCoverageCount: 0,
+    typicalNoticeDays: 11,
+    note: "No recent peak-window coverage assignment recorded in this demo set.",
+  },
+  {
+    id: "fair_alex_diaz",
+    employeeId: "emp_alex_diaz",
+    asOfDate: "2026-06-17",
+    recentApprovedTimeOffCount: 0,
+    recentPeakWindowCoverageCount: 0,
+    typicalNoticeDays: 13,
+    note: "No recent time off approvals and minimal peak-window load recently.",
   },
 ];
 
@@ -356,6 +462,7 @@ export type DemoSeedDataset = {
   coverageRequirements: DemoCoverageRequirement[];
   criticalWindows: DemoCriticalWindow[];
   existingAbsences: DemoExistingAbsence[];
+  fairnessHistory: DemoFairnessHistory[];
   ptoRequests: DemoPtoRequest[];
   scenarios: DemoSeedScenario[];
 };
@@ -370,6 +477,7 @@ export const demoSeedDataset: DemoSeedDataset = {
   coverageRequirements: demoCoverageRequirements,
   criticalWindows: demoCriticalWindows,
   existingAbsences: demoExistingAbsences,
+  fairnessHistory: demoFairnessHistory,
   ptoRequests: demoPtoRequests,
   scenarios: demoSeedScenarios,
 };

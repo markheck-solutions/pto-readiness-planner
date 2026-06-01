@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { methodNotAllowed } from "../../../src/api/safeError";
+
 import {
   DEMO_DATASET_VERSION,
   DEMO_FICTIONAL_NOTICE,
@@ -28,4 +30,17 @@ export async function GET() {
     },
     { status: 200 },
   );
+}
+
+export async function POST() {
+  return methodNotAllowed(["GET"]);
+}
+export async function PUT() {
+  return methodNotAllowed(["GET"]);
+}
+export async function PATCH() {
+  return methodNotAllowed(["GET"]);
+}
+export async function DELETE() {
+  return methodNotAllowed(["GET"]);
 }

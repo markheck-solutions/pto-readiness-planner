@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { methodNotAllowed } from "../../../src/api/safeError";
+
 import {
   DEMO_DATASET_VERSION,
   DEMO_DATE_BOUNDS,
@@ -45,8 +47,24 @@ export async function GET() {
           "defer",
         ],
         dateRangePresets: ["next-8-weeks", "next-12-weeks"],
+        requestTypes: ["pto", "training"],
+        statuses: ["pending", "approved", "withdrawn"],
+        conflictLevels: ["none", "low", "medium", "high"],
       },
     },
     { status: 200 },
   );
+}
+
+export async function POST() {
+  return methodNotAllowed(["GET"]);
+}
+export async function PUT() {
+  return methodNotAllowed(["GET"]);
+}
+export async function PATCH() {
+  return methodNotAllowed(["GET"]);
+}
+export async function DELETE() {
+  return methodNotAllowed(["GET"]);
 }
