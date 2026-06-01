@@ -1,0 +1,10 @@
+# CODEOWNERS
+#
+# Default ownership for the repo. GitHub can request reviews from these owners when
+# branch protection is configured to require CODEOWNERS review.
+#
+# Owner context for this portfolio repo is the GitHub org or user: @markheck-solutions
+# If you later want a smaller ownership group, replace with a real GitHub team:
+#   @markheck-solutions/<team-slug>
+
+* @markheck-solutions

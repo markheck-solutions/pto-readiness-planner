@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 
-function parseBooleanEnv(value: string | undefined, fallback: boolean): boolean {
+function parseBooleanEnv(
+  value: string | undefined,
+  fallback: boolean,
+): boolean {
   if (value === undefined) return fallback;
   if (value.toLowerCase() === "true") return true;
   if (value.toLowerCase() === "false") return false;
@@ -30,6 +33,6 @@ export async function GET() {
       },
       build,
     },
-    { status: 200 }
+    { status: 200 },
   );
 }

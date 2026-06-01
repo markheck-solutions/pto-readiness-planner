@@ -1,36 +1,71 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Team Coverage and PTO Readiness Planner
 
-## Getting Started
+Portfolio app that helps a manager review PTO requests through coverage risk, role requirements, overlapping requests, critical delivery windows, and fairness context. This is decision support, not an HR workflow.
 
-First, run the development server:
+## Demo posture and safety
+
+- No login.
+- Fictional data only.
+- Public demo uses mock drafts only.
+- Approve, defer, and ask for coverage actions are browser-only simulation. They reset on refresh.
+- Do not add real employee, company, customer, schedule, HR, medical, compensation, performance, or confidential staffing data.
+
+## Quick start (local)
+
+1. Install deps:
+
+```bash
+npm ci
+```
+
+2. Create `.env.local` from `.env.example` if you need local overrides. Do not commit `.env.local`.
+
+3. Start the dev server:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+4. Open:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- App: http://127.0.0.1:3102
+- Health: http://127.0.0.1:3102/api/health
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Validation and readiness gates
 
-## Learn More
+Run these from the repo root:
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+npm run format:check
+npm run lint
+npm run typecheck
+npm run test:coverage
+npm run build
+npm run safety
+npm run quality:check
+npm run readme:verify
+npm run readiness-report
+npm run test:browser
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Repo maturity surfaces (external review)
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+These files exist to help reviewers and future operators:
 
-## Deploy on Vercel
+- Operations runbook: `docs/runbooks/operations.md`
+- Validation index: `docs/validation/INDEX.md`
+- CI workflow: `.github/workflows/ci.yml`
+- PR template: `.github/pull_request_template.md`
+- Issue templates: `.github/ISSUE_TEMPLATE/`
+- Ownership: `.github/CODEOWNERS`
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Default branch assumptions
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+This repo assumes the default branch is `master`. If the remote default branch changes, update branch filters in workflow YAML files.
+
+## Secrets and demo safety
+
+- `.env.example` is the source of truth for variable names.
+- `.env.local` must remain untracked.
+- Never print secret values in logs, docs, or issue text.
+- Public demo mode must remain mock-only and safe by default.
