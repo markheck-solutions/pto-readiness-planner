@@ -66,6 +66,13 @@ export async function GET(request: Request) {
 
   if (!requestId && idsRaw) {
     const ids = parseIds(idsRaw);
+    if (ids.length === 0) {
+      return jsonError(
+        400,
+        "invalid_request",
+        "Provide at least one evidence id.",
+      );
+    }
     const grouped = new Map<string, string[]>();
     for (const id of ids) {
       const rid = requestIdFromEvidenceId(id);

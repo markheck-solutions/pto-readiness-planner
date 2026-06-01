@@ -204,4 +204,36 @@ describe("public PTO APIs", () => {
       }),
     );
   });
+
+  it("GET /api/evidence resolves evidence by ids", async () => {
+    const baseline = await evidenceGET(makeReq("/api/evidence?requestId=REQ-1004"));
+    expect(baseline.status).toBe(200);
+    const baselineJson = asRecord((await baseline.json()) as unknown);
+    const first = asRecord(asArray(baselineJson.items)[0]);
+    const evidenceId = String(first.id);
+
+    const res = await evidenceGET(
+      makeReq(`/api/evidence?ids=${encodeURIComponent(evidenceId)}`),
+    );
+    expect(res.status).toBe(200);
+    const json = asRecord((await res.json()) as unknown);
+    const items = asArray(json.items).map(asRecord);
+    expect(items.length).toBe(1);
+    expect(items[0].id).toBe(evidenceId);
+    expect(items[0].requestId).toBe("REQ-1004");
+  });
+
+  it("GET /api/evidence rejects present-but-empty ids with controlled JSON errors", async () => {
+    const res = await evidenceGET(makeReq("/api/evidence?ids=,,,"));
+    expect(res.status).toBe(400);
+    const json = (await res.json()) as unknown;
+    expect(json).toEqual(
+      expect.objectContaining({
+        error: expect.objectContaining({
+          code: "invalid_request",
+          message: expect.any(String),
+        }),
+      }),
+    );
+  });
 });
