@@ -116,7 +116,7 @@ describe("public PTO APIs", () => {
 
   it("GET /api/pto-requests/{id} returns safe seeded detail and 404 for unknown IDs", async () => {
     const ok = await detailGET(makeReq("/api/pto-requests/REQ-1001"), {
-      params: { requestId: "REQ-1001" },
+      params: Promise.resolve({ requestId: "REQ-1001" }),
     });
     expect(ok.status).toBe(200);
     const okJson = (await ok.json()) as unknown;
@@ -130,7 +130,7 @@ describe("public PTO APIs", () => {
     );
 
     const missing = await detailGET(makeReq("/api/pto-requests/NOPE"), {
-      params: { requestId: "NOPE" },
+      params: Promise.resolve({ requestId: "NOPE" }),
     });
     expect(missing.status).toBe(404);
     const missingJson = asRecord((await missing.json()) as unknown);
@@ -141,11 +141,11 @@ describe("public PTO APIs", () => {
   it("GET /api/pto-requests/{id}/assessment returns deterministic assessment with evidence refs", async () => {
     const a1 = await assessmentGET(
       makeReq("/api/pto-requests/REQ-1002/assessment"),
-      { params: { requestId: "REQ-1002" } },
+      { params: Promise.resolve({ requestId: "REQ-1002" }) },
     );
     const a2 = await assessmentGET(
       makeReq("/api/pto-requests/REQ-1002/assessment"),
-      { params: { requestId: "REQ-1002" } },
+      { params: Promise.resolve({ requestId: "REQ-1002" }) },
     );
     expect(a1.status).toBe(200);
     expect(a2.status).toBe(200);

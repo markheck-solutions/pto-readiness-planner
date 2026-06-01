@@ -15,12 +15,12 @@ function parseBooleanEnv(
 
 export async function GET(
   _request: Request,
-  context: { params: { requestId: string } },
+  context: { params: Promise<{ requestId: string }> },
 ) {
   const demoMode = parseBooleanEnv(process.env.NEXT_PUBLIC_DEMO_MODE, true);
   const repo = getDemoRepo();
 
-  const requestId = context.params.requestId;
+  const { requestId } = await context.params;
   const req = findPtoRequestById(repo, requestId);
   if (!req) {
     return jsonError(404, "not_found", "Request not found.", { requestId });
