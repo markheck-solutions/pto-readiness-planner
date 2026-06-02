@@ -317,6 +317,9 @@ export function RequestDetailClient({
                   onClick={(event) =>
                     openEvidence(reason.summary, reason.evidenceIds, event)
                   }
+                  aria-haspopup="dialog"
+                  aria-controls="evidence-drawer-panel"
+                  aria-expanded={drawerState?.reasonSummary === reason.summary}
                   className="inline-flex items-center justify-center rounded-full border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-950 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950/30 dark:text-zinc-50 dark:hover:bg-zinc-900"
                 >
                   Show evidence for {reason.summary}

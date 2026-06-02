@@ -30,7 +30,7 @@ function QueueRow({ item }: { item: QueueTableRow }) {
 
   return (
     <tr className="align-top">
-      <td className="px-4 py-4">
+      <th scope="row" className="px-4 py-4 text-left">
         <div className="font-medium text-zinc-950 dark:text-zinc-50">
           <Link
             href={item.detailHref}
@@ -45,7 +45,7 @@ function QueueRow({ item }: { item: QueueTableRow }) {
         <div className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
           Type: {item.requestType.toUpperCase()} · Status: {item.status}
         </div>
-      </td>
+      </th>
       <td className="px-4 py-4 text-zinc-700 dark:text-zinc-300">
         {item.requestedStartDate === item.requestedEndDate
           ? formatShortDay(item.requestedStartDate)
@@ -87,16 +87,33 @@ export function QueueResultsTable({ items }: { items: QueueTableRow[] }) {
   return (
     <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900/40">
       <table className="w-full border-collapse text-left text-sm">
+        <caption className="sr-only">PTO request queue results</caption>
         <thead className="bg-zinc-50 text-xs text-zinc-600 dark:bg-zinc-950/40 dark:text-zinc-400">
           <tr>
-            <th className="px-4 py-3 font-medium">Request</th>
-            <th className="px-4 py-3 font-medium">Dates</th>
-            <th className="px-4 py-3 font-medium">Team</th>
-            <th className="px-4 py-3 font-medium">Role</th>
-            <th className="px-4 py-3 font-medium">Risk</th>
-            <th className="px-4 py-3 font-medium">Recommendation</th>
-            <th className="px-4 py-3 font-medium">Top reason</th>
-            <th className="px-4 py-3 font-medium">Demo status</th>
+            <th scope="col" className="px-4 py-3 font-medium">
+              Request
+            </th>
+            <th scope="col" className="px-4 py-3 font-medium">
+              Dates
+            </th>
+            <th scope="col" className="px-4 py-3 font-medium">
+              Team
+            </th>
+            <th scope="col" className="px-4 py-3 font-medium">
+              Role
+            </th>
+            <th scope="col" className="px-4 py-3 font-medium">
+              Risk
+            </th>
+            <th scope="col" className="px-4 py-3 font-medium">
+              Recommendation
+            </th>
+            <th scope="col" className="px-4 py-3 font-medium">
+              Top reason
+            </th>
+            <th scope="col" className="px-4 py-3 font-medium">
+              Demo status
+            </th>
           </tr>
         </thead>
         <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">

@@ -4,6 +4,7 @@ import Link from "next/link";
 import "./globals.css";
 
 import { BrowserDecisionProvider } from "./_components/BrowserDecisionProvider";
+import { HeaderNav } from "./_components/HeaderNav";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -71,27 +72,7 @@ export default function RootLayout({
                 {demoMode ? "Demo Mode" : "Local mode"}
               </span>
             </div>
-
-            <nav className="flex items-center gap-4 text-sm">
-              <Link
-                href="/requests"
-                className="text-zinc-700 hover:text-zinc-950 dark:text-zinc-300 dark:hover:text-zinc-50"
-              >
-                Requests
-              </Link>
-              <Link
-                href="/heatmap"
-                className="text-zinc-700 hover:text-zinc-950 dark:text-zinc-300 dark:hover:text-zinc-50"
-              >
-                Coverage
-              </Link>
-              <a
-                href="/api/health"
-                className="hidden text-zinc-700 hover:text-zinc-950 dark:text-zinc-300 dark:hover:text-zinc-50 md:inline"
-              >
-                Health
-              </a>
-            </nav>
+            <HeaderNav />
           </div>
         </header>
 

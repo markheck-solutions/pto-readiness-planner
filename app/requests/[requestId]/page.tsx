@@ -6,7 +6,11 @@ import {
   SafeStatePanel,
 } from "../../_components/SafeStatePanel";
 
-import type { IsoDate } from "../../../src/domain/dates";
+import {
+  isIsoDate,
+  parseIsoDate,
+  type IsoDate,
+} from "../../../src/domain/dates";
 import { createAssessmentForRequest } from "../../../src/domain/assessment/createRequestAssessment";
 import {
   findEmployeeById,
@@ -86,6 +90,7 @@ function buildQueueHref(searchParams: SearchParams): string {
     "demoDecision",
     "coverageBand",
     "conflictLevel",
+    "weekStart",
     "startDate",
     "endDate",
     "sort",
@@ -99,6 +104,23 @@ function buildQueueHref(searchParams: SearchParams): string {
   }
 
   return buildSearchParamsHref("/requests", params);
+}
+
+function buildHeatmapHref(searchParams: SearchParams): string | null {
+  const weekStart = asString(searchParams.weekStart);
+  if (!weekStart || !isIsoDate(weekStart)) return null;
+
+  const params = new URLSearchParams();
+  params.set("weekStart", weekStart);
+  return buildSearchParamsHref("/heatmap", params);
+}
+
+function formatShortDay(iso: IsoDate): string {
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  }).format(parseIsoDate(iso));
 }
 
 function RequestDetailStatePreview({
@@ -193,6 +215,22 @@ export default async function RequestDetailPage({
   const sp = await Promise.resolve(searchParams ?? {});
   const previewState = getDetailPreviewState(asString(sp.state));
   const queueHref = buildQueueHref(sp);
+  const heatmapHref = buildHeatmapHref(sp);
+  const weekStart = asString(sp.weekStart);
+  const weekEnd = asString(sp.endDate);
+  const hasHeatmapContext =
+    heatmapHref !== null &&
+    weekStart !== undefined &&
+    weekEnd !== undefined &&
+    isIsoDate(weekStart) &&
+    isIsoDate(weekEnd);
+  const reviewContext = hasHeatmapContext
+    ? {
+        heatmapHref,
+        weekStart,
+        weekEnd,
+      }
+    : null;
 
   if (previewState) {
     return (
@@ -217,6 +255,40 @@ export default async function RequestDetailPage({
         <div className="mt-6">
           <DemoNotice compact />
         </div>
+
+        {reviewContext ? (
+          <section
+            aria-label="Review context"
+            className="mt-6 rounded-xl border border-zinc-200 bg-white px-5 py-4 text-sm text-zinc-700 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-300"
+          >
+            <div className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
+              Review context
+            </div>
+            <p className="mt-2 leading-6">
+              Selected heatmap week:{" "}
+              <span className="font-semibold text-zinc-950 dark:text-zinc-50">
+                {formatShortDay(reviewContext.weekStart)} to{" "}
+                {formatShortDay(reviewContext.weekEnd)}
+              </span>
+              . Queue filters, detail review, and evidence stay aligned to this
+              public demo window.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-4">
+              <Link
+                href={reviewContext.heatmapHref}
+                className="text-sm font-medium text-zinc-950 underline underline-offset-4 hover:text-zinc-700 dark:text-zinc-50 dark:hover:text-zinc-200"
+              >
+                Return to selected heatmap week
+              </Link>
+              <Link
+                href={queueHref}
+                className="text-sm font-medium text-zinc-950 underline underline-offset-4 hover:text-zinc-700 dark:text-zinc-50 dark:hover:text-zinc-200"
+              >
+                Open queue for this review window
+              </Link>
+            </div>
+          </section>
+        ) : null}
 
         <div className="mt-8">
           <RequestDetailStatePreview
@@ -295,6 +367,40 @@ export default async function RequestDetailPage({
       <div className="mt-6">
         <DemoNotice compact />
       </div>
+
+      {reviewContext ? (
+        <section
+          aria-label="Review context"
+          className="mt-6 rounded-xl border border-zinc-200 bg-white px-5 py-4 text-sm text-zinc-700 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-300"
+        >
+          <div className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
+            Review context
+          </div>
+          <p className="mt-2 leading-6">
+            Selected heatmap week:{" "}
+            <span className="font-semibold text-zinc-950 dark:text-zinc-50">
+              {formatShortDay(reviewContext.weekStart)} to{" "}
+              {formatShortDay(reviewContext.weekEnd)}
+            </span>
+            . Queue filters, detail review, and evidence stay aligned to this
+            public demo window.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-4">
+            <Link
+              href={reviewContext.heatmapHref}
+              className="text-sm font-medium text-zinc-950 underline underline-offset-4 hover:text-zinc-700 dark:text-zinc-50 dark:hover:text-zinc-200"
+            >
+              Return to selected heatmap week
+            </Link>
+            <Link
+              href={queueHref}
+              className="text-sm font-medium text-zinc-950 underline underline-offset-4 hover:text-zinc-700 dark:text-zinc-50 dark:hover:text-zinc-200"
+            >
+              Open queue for this review window
+            </Link>
+          </div>
+        </section>
+      ) : null}
 
       {req && employee && team && role && assessment ? (
         <RequestDetailClient

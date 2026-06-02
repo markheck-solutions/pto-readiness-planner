@@ -4,7 +4,7 @@ import { DemoNotice } from "../_components/DemoNotice";
 import { QueueResultsPanel } from "./QueueResultsPanel";
 import { type QueueTableRow } from "./QueueResultsTable";
 
-import { isIsoDate, type IsoDate } from "../../src/domain/dates";
+import { isIsoDate, parseIsoDate, type IsoDate } from "../../src/domain/dates";
 import {
   buildQueue,
   type QueueItem,
@@ -94,6 +94,14 @@ function buildSearchParamsHref(
   return qs ? `${pathname}?${qs}` : pathname;
 }
 
+function formatShortDay(iso: IsoDate): string {
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  }).format(parseIsoDate(iso));
+}
+
 export default async function RequestsPage({
   searchParams,
 }: {
@@ -110,6 +118,7 @@ export default async function RequestsPage({
   const coverageBandRaw = asString(sp.coverageBand);
   const conflictLevelRaw = asString(sp.conflictLevel);
   const demoDecisionRaw = asString(sp.demoDecision);
+  const weekStartRaw = asString(sp.weekStart);
 
   const startDateRaw = asString(sp.startDate);
   const endDateRaw = asString(sp.endDate);
@@ -213,6 +222,9 @@ export default async function RequestsPage({
   if (sortDirRaw && sortDirRaw !== "asc" && sortDirRaw !== "desc")
     errors.push("Invalid sort direction.");
 
+  const heatmapWeekStart =
+    weekStartRaw && isIsoDate(weekStartRaw) ? weekStartRaw : undefined;
+
   const queue = buildQueue({
     repo,
     filters: {
@@ -237,6 +249,7 @@ export default async function RequestsPage({
   if (coverageBandRaw) baseParams.set("coverageBand", coverageBandRaw);
   if (conflictLevelRaw) baseParams.set("conflictLevel", conflictLevelRaw);
   if (demoDecisionRaw) baseParams.set("demoDecision", demoDecisionRaw);
+  if (heatmapWeekStart) baseParams.set("weekStart", heatmapWeekStart);
   if (startDateRaw) baseParams.set("startDate", startDateRaw);
   if (endDateRaw) baseParams.set("endDate", endDateRaw);
   if (sortKeyRaw) baseParams.set("sort", sortKeyRaw);
@@ -316,11 +329,45 @@ export default async function RequestsPage({
       <div className="mt-6">
         <DemoNotice compact />
       </div>
+
+      {heatmapWeekStart ? (
+        <section
+          aria-label="Review context"
+          className="mt-6 rounded-xl border border-zinc-200 bg-white px-5 py-4 text-sm text-zinc-700 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-300"
+        >
+          <div className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
+            Review context
+          </div>
+          <p className="mt-2 leading-6">
+            Started from the selected heatmap week of{" "}
+            <span className="font-semibold text-zinc-950 dark:text-zinc-50">
+              {formatShortDay(heatmapWeekStart)}
+            </span>
+            . Queue filters and detail links keep that route context available
+            while you review this window.
+          </p>
+          <div className="mt-3">
+            <Link
+              href={buildSearchParamsHref(
+                "/heatmap",
+                new URLSearchParams([["weekStart", heatmapWeekStart]]),
+              )}
+              className="text-sm font-medium text-zinc-950 underline underline-offset-4 hover:text-zinc-700 dark:text-zinc-50 dark:hover:text-zinc-200"
+            >
+              Return to selected heatmap week
+            </Link>
+          </div>
+        </section>
+      ) : null}
+
       <section aria-label="Queue controls" className="mt-8">
         <form
           method="get"
           className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/40"
         >
+          {heatmapWeekStart ? (
+            <input type="hidden" name="weekStart" value={heatmapWeekStart} />
+          ) : null}
           <div className="grid gap-4 md:grid-cols-4">
             <div>
               <label
@@ -566,7 +613,11 @@ export default async function RequestsPage({
           </div>
 
           {errors.length > 0 ? (
-            <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/40 dark:text-amber-100">
+            <div
+              role="alert"
+              aria-live="assertive"
+              className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/40 dark:text-amber-100"
+            >
               <div className="font-medium">Some filters were not applied.</div>
               <ul className="mt-2 list-disc space-y-1 pl-5">
                 {errors.map((e) => (

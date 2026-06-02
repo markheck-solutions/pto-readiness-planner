@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { RiskBadge } from "../../_components/StatusBadges";
 
@@ -144,9 +145,47 @@ export function EvidenceDrawer({
     };
   }, [evidenceKey, evidenceIds, onClose, open, requestId, retryToken]);
 
+  useEffect(() => {
+    if (!open) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const hiddenSurfaces = Array.from(
+      document.querySelectorAll<HTMLElement>("header, main, footer"),
+    );
+
+    for (const surface of hiddenSurfaces) {
+      surface.setAttribute(
+        "data-evidence-drawer-prev-aria-hidden",
+        surface.getAttribute("aria-hidden") ?? "",
+      );
+      surface.setAttribute("aria-hidden", "true");
+      surface.setAttribute("inert", "");
+    }
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      for (const surface of hiddenSurfaces) {
+        const previous = surface.getAttribute(
+          "data-evidence-drawer-prev-aria-hidden",
+        );
+        if (previous === "") {
+          surface.removeAttribute("aria-hidden");
+        } else if (previous !== null) {
+          surface.setAttribute("aria-hidden", previous);
+        }
+        surface.removeAttribute("data-evidence-drawer-prev-aria-hidden");
+        surface.removeAttribute("inert");
+      }
+    };
+  }, [open]);
+
   if (!open) return null;
 
-  return (
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
     <div className="fixed inset-0 z-50 bg-zinc-950/50">
       <div
         aria-hidden="true"
@@ -155,10 +194,13 @@ export function EvidenceDrawer({
       />
 
       <aside
+        id="evidence-drawer-panel"
         ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="evidence-drawer-title"
+        aria-describedby="evidence-drawer-description"
+        aria-busy={state === "loading"}
         className="absolute right-0 top-0 flex h-full w-full max-w-xl flex-col border-l border-zinc-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-950"
       >
         <div className="flex items-start justify-between gap-4 border-b border-zinc-200 px-5 py-4 dark:border-zinc-800">
@@ -172,7 +214,10 @@ export function EvidenceDrawer({
             >
               Evidence drawer
             </h2>
-            <p className="mt-1 text-sm leading-6 text-zinc-700 dark:text-zinc-300">
+            <p
+              id="evidence-drawer-description"
+              className="mt-1 text-sm leading-6 text-zinc-700 dark:text-zinc-300"
+            >
               {reasonSummary ?? "No reason selected."}
             </p>
           </div>
@@ -196,19 +241,31 @@ export function EvidenceDrawer({
           </p>
 
           {state === "loading" ? (
-            <div className="mt-4 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-300">
+            <div
+              role="status"
+              aria-live="polite"
+              className="mt-4 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-300"
+            >
               Loading seeded evidence...
             </div>
           ) : null}
 
           {state === "empty" ? (
-            <div className="mt-4 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-300">
+            <div
+              role="status"
+              aria-live="polite"
+              className="mt-4 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-300"
+            >
               No seeded evidence was found for this reason.
             </div>
           ) : null}
 
           {state === "error" ? (
-            <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 dark:border-red-900/40 dark:bg-red-950/40 dark:text-red-100">
+            <div
+              role="alert"
+              aria-live="assertive"
+              className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 dark:border-red-900/40 dark:bg-red-950/40 dark:text-red-100"
+            >
               <p>Evidence could not be loaded right now.</p>
               <p className="mt-1 text-xs text-red-800 dark:text-red-200">
                 {errorMessage ?? "Try loading the drawer again."}
@@ -291,6 +348,7 @@ export function EvidenceDrawer({
           ) : null}
         </div>
       </aside>
-    </div>
+    </div>,
+    document.body,
   );
 }

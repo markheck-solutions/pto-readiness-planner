@@ -43,6 +43,13 @@ function bandRank(band: DemoCoverageBand): number {
   return 0;
 }
 
+function bandLabel(band: DemoCoverageBand): string {
+  if (band === "critical") return "Critical";
+  if (band === "risky") return "Risky";
+  if (band === "thin") return "Thin";
+  return "Healthy";
+}
+
 function weekRangeHref(weekStart: IsoDate): string {
   const params = new URLSearchParams();
   params.set("weekStart", weekStart);
@@ -51,12 +58,28 @@ function weekRangeHref(weekStart: IsoDate): string {
 
 function requestRangeHref(startDate: IsoDate, endDate: IsoDate): string {
   const params = new URLSearchParams();
+  params.set("weekStart", startDate);
   params.set("startDate", startDate);
   params.set("endDate", endDate);
   params.set("status", "pending");
   params.set("sort", "risk");
   params.set("dir", "desc");
   return `/requests?${params.toString()}`;
+}
+
+function requestDetailHref(
+  requestId: string,
+  weekStart: IsoDate,
+  weekEnd: IsoDate,
+): string {
+  const params = new URLSearchParams();
+  params.set("weekStart", weekStart);
+  params.set("startDate", weekStart);
+  params.set("endDate", weekEnd);
+  params.set("status", "pending");
+  params.set("sort", "risk");
+  params.set("dir", "desc");
+  return `/requests/${requestId}?${params.toString()}`;
 }
 
 function getHeatmapPreviewState(
@@ -354,7 +377,11 @@ export default async function HeatmapPage({
       </div>
 
       {selectionNotice ? (
-        <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/40 dark:text-amber-100">
+        <div
+          role="status"
+          aria-live="polite"
+          className="mt-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/40 dark:text-amber-100"
+        >
           {selectionNotice}
         </div>
       ) : null}
@@ -387,6 +414,13 @@ export default async function HeatmapPage({
                 key={week.weekStart}
                 href={weekRangeHref(week.weekStart)}
                 aria-current={selected ? "page" : undefined}
+                aria-label={[
+                  `Week of ${formatShortDay(week.weekStart)}.`,
+                  `${bandLabel(week.worstBand)} coverage.`,
+                  week.reasons.length > 0
+                    ? `Pressure reasons: ${week.reasons.join("; ")}.`
+                    : "No elevated pressure signals in this week.",
+                ].join(" ")}
                 className={[
                   "rounded-xl border bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-md dark:bg-zinc-900/40",
                   selected
@@ -490,7 +524,11 @@ export default async function HeatmapPage({
                   >
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <Link
-                        href={`/requests/${item.id}`}
+                        href={requestDetailHref(
+                          item.id,
+                          selectedWeekStart,
+                          selectedWeekEnd,
+                        )}
                         className="text-sm font-semibold text-zinc-950 underline underline-offset-4 hover:text-zinc-700 dark:text-zinc-50 dark:hover:text-zinc-200"
                       >
                         {item.employee.displayName} ({item.id})
@@ -540,14 +578,30 @@ export default async function HeatmapPage({
           </div>
 
           <div className="mt-4 overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800">
-            <table className="w-full border-collapse text-left text-sm">
+            <table
+              className="w-full border-collapse text-left text-sm"
+              aria-describedby="coverage-matrix-summary"
+            >
+              <caption className="sr-only">
+                Coverage matrix for the selected week
+              </caption>
               <thead className="bg-zinc-50 text-xs text-zinc-600 dark:bg-zinc-950/40 dark:text-zinc-400">
                 <tr>
-                  <th className="px-3 py-2 font-medium">Team</th>
-                  <th className="px-3 py-2 font-medium">Role</th>
-                  <th className="px-3 py-2 font-medium">Required</th>
-                  <th className="px-3 py-2 font-medium">Available</th>
-                  <th className="px-3 py-2 font-medium">Status</th>
+                  <th scope="col" className="px-3 py-2 font-medium">
+                    Team
+                  </th>
+                  <th scope="col" className="px-3 py-2 font-medium">
+                    Role
+                  </th>
+                  <th scope="col" className="px-3 py-2 font-medium">
+                    Required
+                  </th>
+                  <th scope="col" className="px-3 py-2 font-medium">
+                    Available
+                  </th>
+                  <th scope="col" className="px-3 py-2 font-medium">
+                    Status
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
@@ -556,7 +610,10 @@ export default async function HeatmapPage({
                     <td className="px-3 py-3 text-zinc-700 dark:text-zinc-300">
                       {row.teamName}
                     </td>
-                    <td className="px-3 py-3 text-zinc-700 dark:text-zinc-300">
+                    <th
+                      scope="row"
+                      className="px-3 py-3 text-left text-zinc-700 dark:text-zinc-300"
+                    >
                       <div className="font-medium text-zinc-950 dark:text-zinc-50">
                         {row.roleName}
                       </div>
@@ -564,7 +621,7 @@ export default async function HeatmapPage({
                         {formatShortDay(selectedWeekStart)} to{" "}
                         {formatShortDay(selectedWeekEnd)}
                       </div>
-                    </td>
+                    </th>
                     <td className="px-3 py-3 text-zinc-700 dark:text-zinc-300">
                       <span className="font-mono tabular-nums">
                         {row.required}
@@ -597,6 +654,14 @@ export default async function HeatmapPage({
               </tbody>
             </table>
           </div>
+          <p
+            id="coverage-matrix-summary"
+            className="mt-3 text-xs text-zinc-500 dark:text-zinc-400"
+          >
+            Coverage matrix rows compare required and available staffing for the
+            selected week, including above minimum, at minimum, below minimum,
+            and single-person exposure states.
+          </p>
         </section>
       </section>
     </div>

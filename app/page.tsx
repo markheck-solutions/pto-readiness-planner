@@ -58,6 +58,14 @@ function getOverviewPreviewState(
   return null;
 }
 
+function buildDetailHref(requestId: string): string {
+  const params = new URLSearchParams();
+  params.set("status", "pending");
+  params.set("sort", "risk");
+  params.set("dir", "desc");
+  return `/requests/${requestId}?${params.toString()}`;
+}
+
 function OverviewStatePreview({ state }: { state: OverviewPreviewState }) {
   if (state === "loading") {
     return (
@@ -414,7 +422,7 @@ export default async function Home({
               {topUrgent.map((r) => (
                 <li key={r.id}>
                   <Link
-                    href={`/requests/${r.id}`}
+                    href={buildDetailHref(r.id)}
                     className="block rounded-lg border border-zinc-200 bg-white px-4 py-3 transition hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950/20 dark:hover:border-zinc-700 dark:hover:bg-zinc-950/30"
                   >
                     <div className="flex flex-wrap items-center justify-between gap-3">
