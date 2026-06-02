@@ -2,14 +2,54 @@ import Link from "next/link";
 
 import { DemoNotice } from "../../_components/DemoNotice";
 import { SimulatedDecisionControls } from "../../_components/SimulatedDecisionControls";
-import { findDemoPtoRequestById } from "../../../lib/demo-samples";
 
-export default function RequestDetailPage({
+import { RecommendationBadge, RiskBadge } from "../../_components/StatusBadges";
+
+import { parseIsoDate, type IsoDate } from "../../../src/domain/dates";
+import { createAssessmentForRequest } from "../../../src/domain/assessment/createRequestAssessment";
+import {
+  findEmployeeById,
+  findPtoRequestById,
+  findRoleById,
+  findTeamById,
+  getDemoRepo,
+} from "../../../src/repos/demoRepo";
+
+function formatShortDay(iso: IsoDate): string {
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  }).format(parseIsoDate(iso));
+}
+
+function formatDateRange(start: IsoDate, end: IsoDate): string {
+  if (start === end) return formatShortDay(start);
+  return `${formatShortDay(start)} to ${formatShortDay(end)}`;
+}
+
+export default async function RequestDetailPage({
   params,
 }: {
-  params: { requestId: string };
+  params: { requestId: string } | Promise<{ requestId: string }>;
 }) {
-  const request = findDemoPtoRequestById(params.requestId);
+  const { requestId } = await Promise.resolve(params);
+  const repo = getDemoRepo();
+  const req = findPtoRequestById(repo, requestId);
+
+  const employee = req ? findEmployeeById(repo, req.employeeId) : null;
+  const team = employee ? findTeamById(repo, employee.teamId) : null;
+  const role = employee ? findRoleById(repo, employee.roleId) : null;
+
+  const assessment =
+    req && employee
+      ? createAssessmentForRequest({
+          repo,
+          request: req,
+          teamId: employee.teamId,
+          roleId: employee.roleId,
+        })
+      : null;
 
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-10 sm:py-14">
@@ -25,7 +65,7 @@ export default function RequestDetailPage({
             <span aria-hidden="true">/</span> Request detail
           </div>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-3xl">
-            {request ? request.id : params.requestId}
+            {req ? req.id : requestId}
           </h1>
         </div>
       </div>
@@ -34,7 +74,7 @@ export default function RequestDetailPage({
         <DemoNotice compact />
       </div>
 
-      {request ? (
+      {req && employee && team && role && assessment ? (
         <>
           <section
             aria-label="Request summary"
@@ -45,7 +85,7 @@ export default function RequestDetailPage({
                 Employee
               </div>
               <div className="mt-1 text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-                {request.employeeName}
+                {employee.displayName}
               </div>
             </div>
             <div>
@@ -53,7 +93,7 @@ export default function RequestDetailPage({
                 Dates
               </div>
               <div className="mt-1 text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-                {request.dateRange}
+                {formatDateRange(req.requestedStartDate, req.requestedEndDate)}
               </div>
             </div>
             <div>
@@ -61,7 +101,7 @@ export default function RequestDetailPage({
                 Team
               </div>
               <div className="mt-1 text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-                {request.team}
+                {team.name}
               </div>
             </div>
             <div>
@@ -69,42 +109,78 @@ export default function RequestDetailPage({
                 Role
               </div>
               <div className="mt-1 text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-                {request.role}
+                {role.name}
               </div>
             </div>
             <div className="sm:col-span-2">
-              <div className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
-                Summary
-              </div>
-              <div className="mt-1 text-sm text-zinc-700 dark:text-zinc-300">
-                {request.summary}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <div className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
+                    Request type
+                  </div>
+                  <div className="mt-1 text-sm text-zinc-700 dark:text-zinc-300">
+                    {req.requestType.toUpperCase()} · Status: {req.status}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
+                    Submitted
+                  </div>
+                  <div className="mt-1 text-sm text-zinc-700 dark:text-zinc-300">
+                    {new Intl.DateTimeFormat("en-US", {
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
+                      timeZone: "UTC",
+                    }).format(new Date(req.submittedAt))}
+                  </div>
+                </div>
               </div>
             </div>
           </section>
 
-          <section aria-label="Readiness framing" className="mt-10 max-w-3xl">
-            <h2 className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-              Coverage readiness framing
-            </h2>
-            <p className="mt-3 text-sm leading-6 text-zinc-700 dark:text-zinc-300">
-              This page is a shell. Later milestones will replace the text below
-              with computed risk, evidence, overlaps, and critical window
-              checks.
-            </p>
-            <ul className="mt-4 list-disc space-y-2 pl-5 text-sm leading-6 text-zinc-700 dark:text-zinc-300">
-              <li>
-                Risk band:{" "}
-                <span className="font-medium">{request.riskBand}</span>
-              </li>
-              <li>
-                Suggested next step:{" "}
-                <span className="font-medium">{request.recommendation}</span>
-              </li>
-              <li>
-                Top consideration:{" "}
-                <span className="font-medium">{request.topReason}</span>
-              </li>
-            </ul>
+          <section aria-label="Coverage readiness snapshot" className="mt-10">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <h2 className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
+                  Coverage readiness snapshot
+                </h2>
+                <p className="mt-1 text-sm leading-6 text-zinc-700 dark:text-zinc-300">
+                  Deterministic demo assessment. You can trace the recommendation back to seeded facts.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <RiskBadge band={assessment.band} score={assessment.score} />
+                <RecommendationBadge recommendation={assessment.recommendation} />
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/40">
+              <div className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
+                Top reasons
+              </div>
+              <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-zinc-700 dark:text-zinc-300">
+                {assessment.reasons.slice(0, 3).map((r) => (
+                  <li key={r.code}>
+                    <span className="font-medium text-zinc-950 dark:text-zinc-50">
+                      {r.summary}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-4 text-sm text-zinc-700 dark:text-zinc-300">
+                <span className="font-medium text-zinc-950 dark:text-zinc-50">
+                  Manager context:
+                </span>{" "}
+                {req.managerContext}
+              </div>
+              <div className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">
+                <span className="font-medium text-zinc-950 dark:text-zinc-50">
+                  Employee note:
+                </span>{" "}
+                {req.employeeNote}
+              </div>
+            </div>
           </section>
 
           <section aria-label="Demo actions" className="mt-10 max-w-3xl">
@@ -126,7 +202,7 @@ export default function RequestDetailPage({
           className="mt-8 rounded-xl border border-zinc-200 bg-white p-5 text-sm text-zinc-700 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-300"
         >
           <p className="font-medium text-zinc-950 dark:text-zinc-50">
-            This request ID is not part of the demo shell yet.
+            This request ID is not part of the demo dataset.
           </p>
           <p className="mt-2">
             Go back to the{" "}
