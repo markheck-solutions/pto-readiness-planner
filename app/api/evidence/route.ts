@@ -77,7 +77,9 @@ export async function GET(request: Request) {
     for (const id of ids) {
       const rid = requestIdFromEvidenceId(id);
       if (!rid) {
-        return jsonError(400, "invalid_request", "Invalid evidence id.", { id });
+        return jsonError(400, "invalid_request", "Invalid evidence id.", {
+          id,
+        });
       }
       grouped.set(rid, [...(grouped.get(rid) ?? []), id]);
     }
@@ -85,11 +87,17 @@ export async function GET(request: Request) {
     for (const [rid, desired] of grouped.entries()) {
       const req = findPtoRequestById(repo, rid);
       if (!req) {
-        return jsonError(404, "not_found", "Request not found.", { requestId: rid });
+        return jsonError(404, "not_found", "Request not found.", {
+          requestId: rid,
+        });
       }
       const emp = repo.employees.find((e) => e.id === req.employeeId);
       if (!emp) {
-        return jsonError(500, "internal_error", "Seed data is missing employee.");
+        return jsonError(
+          500,
+          "internal_error",
+          "Seed data is missing employee.",
+        );
       }
       const evidence = buildEvidenceForRequest({
         repo,

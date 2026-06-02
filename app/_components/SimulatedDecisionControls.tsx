@@ -2,16 +2,15 @@
 
 import { useBrowserDecision } from "./BrowserDecisionProvider";
 
-import {
-  decisionActionLabel,
-} from "../../src/domain/simulation";
+import { decisionActionLabel } from "../../src/domain/simulation";
 
 export function SimulatedDecisionControls({
   requestId,
 }: {
   requestId: string;
 }) {
-  const { decision, setDecision, clearDecision } = useBrowserDecision(requestId);
+  const { decision, setDecision, clearDecision } =
+    useBrowserDecision(requestId);
   const bannerLabel = decisionActionLabel(decision);
 
   return (

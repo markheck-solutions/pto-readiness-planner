@@ -2,6 +2,10 @@ import Link from "next/link";
 
 import { DemoNotice } from "./_components/DemoNotice";
 import { KpiCard } from "./_components/KpiCard";
+import {
+  LoadingStateSkeleton,
+  SafeStatePanel,
+} from "./_components/SafeStatePanel";
 import { RiskBadge } from "./_components/StatusBadges";
 
 import { buildCoverageMatrix } from "../src/domain/coverage/coverageMatrix";
@@ -15,6 +19,14 @@ import { buildCalendarHeatmap } from "../src/domain/heatmap/heatmapBuilder";
 import { buildQueue } from "../src/domain/ptoQueue/queueService";
 import type { DemoCoverageBand } from "../src/demo/dataset";
 import { getDemoRepo } from "../src/repos/demoRepo";
+
+type SearchParams = Record<string, string | string[] | undefined>;
+type OverviewPreviewState = "loading" | "no-urgent" | "unavailable" | "error";
+
+function asString(value: string | string[] | undefined): string | undefined {
+  if (!value) return undefined;
+  return Array.isArray(value) ? value[0] : value;
+}
 
 function formatShortDay(iso: IsoDate): string {
   return new Intl.DateTimeFormat("en-US", {
@@ -36,7 +48,167 @@ function bandRank(band: DemoCoverageBand): number {
   return 0;
 }
 
-export default function Home() {
+function getOverviewPreviewState(
+  value: string | undefined,
+): OverviewPreviewState | null {
+  if (value === "loading") return "loading";
+  if (value === "no-urgent") return "no-urgent";
+  if (value === "unavailable") return "unavailable";
+  if (value === "error") return "error";
+  return null;
+}
+
+function OverviewStatePreview({ state }: { state: OverviewPreviewState }) {
+  if (state === "loading") {
+    return (
+      <SafeStatePanel
+        label="Overview loading preview"
+        title="Loading the manager overview"
+        description="The overview is still preparing the latest queue summary. Final counts stay hidden until the data is ready, so managers never see half-loaded totals."
+        tone="info"
+        role="status"
+        ariaLive="polite"
+        actions={[
+          { href: "/", label: "Return to live overview" },
+          {
+            href: "/requests?status=pending&sort=risk&dir=desc",
+            label: "Open PTO request queue",
+            variant: "secondary",
+          },
+        ]}
+        bullets={[
+          "Use the queue if you need to keep reviewing requests while the summary finishes loading.",
+          "The overview swaps back to live counts once the ready state returns.",
+        ]}
+      >
+        <LoadingStateSkeleton cards={5} />
+      </SafeStatePanel>
+    );
+  }
+
+  if (state === "no-urgent") {
+    return (
+      <SafeStatePanel
+        label="Overview no-urgent preview"
+        title="No urgent items need triage right now"
+        description="This safe state shows the overview when nothing in the current review window needs immediate escalation. Managers can still open the queue or scan coverage before the next decision."
+        tone="neutral"
+        actions={[
+          {
+            href: "/requests?status=pending&sort=risk&dir=desc",
+            label: "Open the full queue",
+          },
+          {
+            href: "/heatmap",
+            label: "Check the coverage heatmap",
+            variant: "secondary",
+          },
+        ]}
+        bullets={[
+          "Use this view to confirm that today’s requests can be handled in normal review order.",
+          "No live KPI totals are shown here, which prevents stale summary data from lingering behind the calm-state message.",
+        ]}
+      />
+    );
+  }
+
+  if (state === "unavailable") {
+    return (
+      <SafeStatePanel
+        label="Overview unavailable-data preview"
+        title="Overview data is temporarily unavailable"
+        description="The high-level summary could not be refreshed just now. Use the queue or heatmap while the overview reconnects, then return to the live view."
+        tone="caution"
+        role="status"
+        ariaLive="polite"
+        actions={[
+          { href: "/", label: "Retry the live overview" },
+          {
+            href: "/requests?status=pending&sort=risk&dir=desc",
+            label: "Open PTO request queue",
+            variant: "secondary",
+          },
+          {
+            href: "/heatmap",
+            label: "Open coverage heatmap",
+            variant: "secondary",
+          },
+        ]}
+        bullets={[
+          "The fallback hides final KPI totals until the summary is available again.",
+          "No technical diagnostics or provider details are exposed in this browser state.",
+        ]}
+      />
+    );
+  }
+
+  return (
+    <SafeStatePanel
+      label="Overview error preview"
+      title="Overview could not be loaded right now"
+      description="Something interrupted the overview refresh. Retry the live overview or move to another safe surface while this page recovers."
+      tone="danger"
+      role="alert"
+      ariaLive="assertive"
+      actions={[
+        { href: "/", label: "Retry the live overview" },
+        {
+          href: "/requests?status=pending&sort=risk&dir=desc",
+          label: "Review requests instead",
+          variant: "secondary",
+        },
+        {
+          href: "/heatmap",
+          label: "Open coverage heatmap",
+          variant: "secondary",
+        },
+      ]}
+      bullets={[
+        "The fallback keeps managers on a recoverable path without showing stale cards or raw technical details.",
+        "Refresh or use the safe navigation links above when you are ready to continue.",
+      ]}
+    />
+  );
+}
+
+export default async function Home({
+  searchParams,
+}: {
+  searchParams?: SearchParams | Promise<SearchParams>;
+}) {
+  const sp = await Promise.resolve(searchParams ?? {});
+  const previewState = getOverviewPreviewState(asString(sp.state));
+
+  if (previewState) {
+    return (
+      <div className="mx-auto w-full max-w-5xl px-6 py-10 sm:py-14">
+        <section
+          aria-label="Manager overview"
+          className="grid gap-8 lg:grid-cols-3"
+        >
+          <div className="lg:col-span-2">
+            <h1 className="text-balance text-3xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-4xl">
+              PTO coverage readiness command center
+            </h1>
+            <p className="mt-4 text-pretty text-base leading-7 text-zinc-700 dark:text-zinc-300 sm:text-lg">
+              Triage PTO requests by coverage pressure, critical windows, and
+              conflict risk. This is decision support for managers, not a live
+              HR workflow.
+            </p>
+
+            <div className="mt-7">
+              <DemoNotice />
+            </div>
+          </div>
+        </section>
+
+        <div className="mt-10">
+          <OverviewStatePreview state={previewState} />
+        </div>
+      </div>
+    );
+  }
+
   const repo = getDemoRepo();
   const queue = buildQueue({ repo, filters: {} });
 
@@ -74,29 +246,41 @@ export default function Home() {
     .filter((w) => w.endDate >= today)
     .slice()
     .sort((a, b) =>
-      a.startDate === b.startDate ? (a.id < b.id ? -1 : 1) : a.startDate < b.startDate ? -1 : 1,
+      a.startDate === b.startDate
+        ? a.id < b.id
+          ? -1
+          : 1
+        : a.startDate < b.startDate
+          ? -1
+          : 1,
     );
 
   const topUrgent = pending
     .slice()
     .sort((a, b) => {
-      const bandDelta = bandRank(b.assessment.band) - bandRank(a.assessment.band);
+      const bandDelta =
+        bandRank(b.assessment.band) - bandRank(a.assessment.band);
       if (bandDelta !== 0) return bandDelta;
-      if (a.assessment.score !== b.assessment.score) return b.assessment.score - a.assessment.score;
+      if (a.assessment.score !== b.assessment.score)
+        return b.assessment.score - a.assessment.score;
       return a.id < b.id ? -1 : 1;
     })
     .slice(0, 3);
 
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-10 sm:py-14">
-      <section aria-label="Manager overview" className="grid gap-8 lg:grid-cols-3">
+      <section
+        aria-label="Manager overview"
+        className="grid gap-8 lg:grid-cols-3"
+      >
         <div className="lg:col-span-2">
           <h1 className="text-balance text-3xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-4xl">
             PTO coverage readiness command center
           </h1>
           <p className="mt-4 text-pretty text-base leading-7 text-zinc-700 dark:text-zinc-300 sm:text-lg">
-            Triage PTO requests by coverage pressure, critical windows, and conflict risk. This is
-            decision support for managers, not a live HR workflow.
+            Triage PTO requests by coverage pressure, critical windows, and
+            conflict risk. This is decision support for managers, not a live HR
+            workflow.
           </p>
 
           <div className="mt-7">
@@ -124,7 +308,12 @@ export default function Home() {
               </Link>{" "}
               {highRisk.some((r) => r.assessment.band === "critical") ? (
                 <span className="text-zinc-600 dark:text-zinc-400">
-                  ({highRisk.filter((r) => r.assessment.band === "critical").length} pending)
+                  (
+                  {
+                    highRisk.filter((r) => r.assessment.band === "critical")
+                      .length
+                  }{" "}
+                  pending)
                 </span>
               ) : (
                 <span className="text-zinc-600 dark:text-zinc-400">
@@ -140,7 +329,8 @@ export default function Home() {
                 Work the risky queue
               </Link>{" "}
               <span className="text-zinc-600 dark:text-zinc-400">
-                ({highRisk.filter((r) => r.assessment.band === "risky").length} pending)
+                ({highRisk.filter((r) => r.assessment.band === "risky").length}{" "}
+                pending)
               </span>
             </li>
             <li>
@@ -193,7 +383,10 @@ export default function Home() {
         </div>
       </section>
 
-      <section aria-label="Urgent watchlist" className="mt-10 grid gap-6 lg:grid-cols-2">
+      <section
+        aria-label="Urgent watchlist"
+        className="mt-10 grid gap-6 lg:grid-cols-2"
+      >
         <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/40">
           <div className="flex items-center justify-between gap-4">
             <div>
@@ -231,18 +424,32 @@ export default function Home() {
                           ({r.id})
                         </span>
                       </div>
-                      <RiskBadge band={r.assessment.band} score={r.assessment.score} />
+                      <RiskBadge
+                        band={r.assessment.band}
+                        score={r.assessment.score}
+                      />
                     </div>
                     <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-zinc-700 dark:text-zinc-300">
                       <span className="font-medium">{r.team.name}</span>
-                      <span className="text-zinc-500 dark:text-zinc-400" aria-hidden="true">
+                      <span
+                        className="text-zinc-500 dark:text-zinc-400"
+                        aria-hidden="true"
+                      >
                         ·
                       </span>
                       <span>{r.role.name}</span>
-                      <span className="text-zinc-500 dark:text-zinc-400" aria-hidden="true">
+                      <span
+                        className="text-zinc-500 dark:text-zinc-400"
+                        aria-hidden="true"
+                      >
                         ·
                       </span>
-                      <span>{formatDateRange(r.requestedStartDate, r.requestedEndDate)}</span>
+                      <span>
+                        {formatDateRange(
+                          r.requestedStartDate,
+                          r.requestedEndDate,
+                        )}
+                      </span>
                     </div>
                     <div className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
                       {r.assessment.topReason.summary}

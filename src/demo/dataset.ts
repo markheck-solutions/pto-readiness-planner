@@ -107,7 +107,8 @@ export const demoTeams: DemoTeam[] = [
     id: "team_release_ops",
     name: "Release Operations",
     timezone: "America/Los_Angeles",
-    description: "Release coordination, change readiness, and cut-week support.",
+    description:
+      "Release coordination, change readiness, and cut-week support.",
   },
   {
     id: "team_customer_support",
@@ -120,7 +121,8 @@ export const demoTeams: DemoTeam[] = [
     id: "team_delivery",
     name: "Delivery",
     timezone: "America/Chicago",
-    description: "Delivery planning, tracking, and cross-team dependency follow-up.",
+    description:
+      "Delivery planning, tracking, and cross-team dependency follow-up.",
   },
 ];
 
@@ -133,17 +135,20 @@ export const demoRoles: DemoRole[] = [
   {
     id: "role_escalation_owner",
     name: "Escalation Owner",
-    description: "Primary decision-maker for active escalations and customer triage.",
+    description:
+      "Primary decision-maker for active escalations and customer triage.",
   },
   {
     id: "role_support_lead",
     name: "Support Lead",
-    description: "Run the shift lead rotation and keep service continuity stable.",
+    description:
+      "Run the shift lead rotation and keep service continuity stable.",
   },
   {
     id: "role_delivery_analyst",
     name: "Delivery Analyst",
-    description: "Tracks delivery risk, blockers, and change readiness signals.",
+    description:
+      "Tracks delivery risk, blockers, and change readiness signals.",
   },
 ];
 
@@ -283,7 +288,8 @@ export const demoPtoRequests: DemoPtoRequest[] = [
     status: "pending",
     submittedAt: "2026-06-10T15:20:00.000Z",
     employeeNote: "Planned PTO with advance notice.",
-    managerContext: "Overlaps release cut week; confirm backup coverage and handoffs.",
+    managerContext:
+      "Overlaps release cut week; confirm backup coverage and handoffs.",
   },
   {
     id: "REQ-1002",
@@ -318,7 +324,8 @@ export const demoPtoRequests: DemoPtoRequest[] = [
     status: "pending",
     submittedAt: "2026-06-29T19:40:00.000Z",
     employeeNote: "Planned PTO outside critical windows.",
-    managerContext: "No overlaps. Coverage stays above minimum for delivery analyst role.",
+    managerContext:
+      "No overlaps. Coverage stays above minimum for delivery analyst role.",
   },
   {
     id: "REQ-1004",

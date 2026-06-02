@@ -24,7 +24,10 @@ function worstBand(a: DemoCoverageBand, b: DemoCoverageBand): DemoCoverageBand {
   return order[b] > order[a] ? b : a;
 }
 
-function bandFromCoverage(required: number, available: number): DemoCoverageBand {
+function bandFromCoverage(
+  required: number,
+  available: number,
+): DemoCoverageBand {
   if (required <= 0) return "healthy";
   if (available < required) return "risky";
   if (available === required) return "thin";
@@ -48,7 +51,10 @@ export function buildCalendarHeatmap(args: {
   const startDate = repo.meta.dateBounds.startDate;
   const spanDays = preset === "next-12-weeks" ? 83 : 55;
   const endDate = addDaysIsoDate(startDate, spanDays);
-  const boundedEnd = endDate > repo.meta.dateBounds.endDate ? repo.meta.dateBounds.endDate : endDate;
+  const boundedEnd =
+    endDate > repo.meta.dateBounds.endDate
+      ? repo.meta.dateBounds.endDate
+      : endDate;
 
   const cells: HeatmapCell[] = [];
 
@@ -61,23 +67,41 @@ export function buildCalendarHeatmap(args: {
     for (const team of teams) {
       const windows = repo.criticalWindows.filter((w) => w.teamId === team.id);
       for (const w of windows) {
-        if (overlaps({ start: day, end: day }, { start: w.startDate, end: w.endDate })) {
+        if (
+          overlaps(
+            { start: day, end: day },
+            { start: w.startDate, end: w.endDate },
+          )
+        ) {
           reasons.push(`${team.name}: critical window "${w.title}"`);
-          dayBand = worstBand(dayBand, w.kind === "blackout" ? "critical" : "thin");
+          dayBand = worstBand(
+            dayBand,
+            w.kind === "blackout" ? "critical" : "thin",
+          );
         }
       }
 
-      for (const req of repo.coverageRequirements.filter((c) => c.teamId === team.id)) {
+      for (const req of repo.coverageRequirements.filter(
+        (c) => c.teamId === team.id,
+      )) {
         const role = repo.roles.find((r) => r.id === req.roleId);
         const roleName = role?.name ?? req.roleId;
-        const employees = repo.employees.filter((e) => e.teamId === team.id && e.roleId === req.roleId);
+        const employees = repo.employees.filter(
+          (e) => e.teamId === team.id && e.roleId === req.roleId,
+        );
 
         const absent = new Set<string>();
         for (const a of repo.existingAbsences) {
           const emp = repo.employees.find((e) => e.id === a.employeeId);
           if (!emp) continue;
           if (emp.teamId !== team.id || emp.roleId !== req.roleId) continue;
-          if (overlaps({ start: day, end: day }, { start: a.startDate, end: a.endDate })) absent.add(emp.id);
+          if (
+            overlaps(
+              { start: day, end: day },
+              { start: a.startDate, end: a.endDate },
+            )
+          )
+            absent.add(emp.id);
         }
         // For heatmap pressure, treat all non-withdrawn requests as potential absences.
         for (const r of repo.ptoRequests) {
@@ -85,7 +109,13 @@ export function buildCalendarHeatmap(args: {
           const emp = repo.employees.find((e) => e.id === r.employeeId);
           if (!emp) continue;
           if (emp.teamId !== team.id || emp.roleId !== req.roleId) continue;
-          if (overlaps({ start: day, end: day }, { start: r.requestedStartDate, end: r.requestedEndDate })) absent.add(emp.id);
+          if (
+            overlaps(
+              { start: day, end: day },
+              { start: r.requestedStartDate, end: r.requestedEndDate },
+            )
+          )
+            absent.add(emp.id);
         }
 
         const available = Math.max(0, employees.length - absent.size);

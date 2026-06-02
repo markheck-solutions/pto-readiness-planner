@@ -26,12 +26,7 @@ describe("seeded demo dataset", () => {
     }
 
     const bands = new Set(scenarios.map((s) => s.expectedCoverageBand));
-    for (const required of [
-      "healthy",
-      "thin",
-      "risky",
-      "critical",
-    ] as const) {
+    for (const required of ["healthy", "thin", "risky", "critical"] as const) {
       expect(bands.has(required)).toBe(true);
     }
   });
@@ -46,7 +41,9 @@ describe("seeded demo dataset", () => {
       expect(comparisons.has(required)).toBe(true);
     }
 
-    expect(scenarios.some((s) => s.singlePersonCriticalRoleExposure)).toBe(true);
+    expect(scenarios.some((s) => s.singlePersonCriticalRoleExposure)).toBe(
+      true,
+    );
   });
 
   it("computes a deterministic seed fingerprint", () => {

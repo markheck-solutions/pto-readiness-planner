@@ -273,8 +273,8 @@ export function RequestDetailClient({
             Recommendation reasons
           </h3>
           <p className="mt-1 text-sm leading-6 text-zinc-700 dark:text-zinc-300">
-            Each reason traces back to seeded facts. Open evidence to inspect the
-            supporting details.
+            Each reason traces back to seeded facts. Open evidence to inspect
+            the supporting details.
           </p>
         </div>
 
@@ -384,9 +384,7 @@ export function RequestDetailClient({
                     <div className="font-medium text-zinc-950 dark:text-zinc-50">
                       {option.displayName}
                     </div>
-                    <div className="mt-1 text-xs">
-                      {backupNote(option)}
-                    </div>
+                    <div className="mt-1 text-xs">{backupNote(option)}</div>
                   </li>
                 ))}
               </ul>

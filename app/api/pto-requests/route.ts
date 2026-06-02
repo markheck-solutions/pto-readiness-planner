@@ -34,7 +34,9 @@ function asOneOf<T extends readonly string[]>(
   allowed: T,
 ): T[number] | null {
   if (!value) return null;
-  return (allowed as readonly string[]).includes(value) ? (value as T[number]) : null;
+  return (allowed as readonly string[]).includes(value)
+    ? (value as T[number])
+    : null;
 }
 
 export async function GET(request: Request) {
@@ -46,40 +48,45 @@ export async function GET(request: Request) {
   const teamId = url.searchParams.get("teamId") ?? undefined;
   const roleId = url.searchParams.get("roleId") ?? undefined;
 
-  const requestType = asOneOf(
-    url.searchParams.get("requestType"),
-    ["pto", "training"] as const,
-  ) as DemoRequestType | null;
+  const requestType = asOneOf(url.searchParams.get("requestType"), [
+    "pto",
+    "training",
+  ] as const) as DemoRequestType | null;
   if (url.searchParams.has("requestType") && !requestType) {
     return jsonError(400, "invalid_request", "Invalid requestType.", {
       allowed: ["pto", "training"],
     });
   }
 
-  const status = asOneOf(
-    url.searchParams.get("status"),
-    ["pending", "approved", "withdrawn"] as const,
-  ) as DemoRequestStatus | null;
+  const status = asOneOf(url.searchParams.get("status"), [
+    "pending",
+    "approved",
+    "withdrawn",
+  ] as const) as DemoRequestStatus | null;
   if (url.searchParams.has("status") && !status) {
     return jsonError(400, "invalid_request", "Invalid status.", {
       allowed: ["pending", "approved", "withdrawn"],
     });
   }
 
-  const coverageBand = asOneOf(
-    url.searchParams.get("coverageBand"),
-    ["healthy", "thin", "risky", "critical"] as const,
-  ) as DemoCoverageBand | null;
+  const coverageBand = asOneOf(url.searchParams.get("coverageBand"), [
+    "healthy",
+    "thin",
+    "risky",
+    "critical",
+  ] as const) as DemoCoverageBand | null;
   if (url.searchParams.has("coverageBand") && !coverageBand) {
     return jsonError(400, "invalid_request", "Invalid coverageBand.", {
       allowed: ["healthy", "thin", "risky", "critical"],
     });
   }
 
-  const conflictLevel = asOneOf(
-    url.searchParams.get("conflictLevel"),
-    ["none", "low", "medium", "high"] as const,
-  );
+  const conflictLevel = asOneOf(url.searchParams.get("conflictLevel"), [
+    "none",
+    "low",
+    "medium",
+    "high",
+  ] as const);
   if (url.searchParams.has("conflictLevel") && !conflictLevel) {
     return jsonError(400, "invalid_request", "Invalid conflictLevel.", {
       allowed: ["none", "low", "medium", "high"],

@@ -1,7 +1,10 @@
 import type { DemoCoverageBand } from "../../demo/dataset";
 import type { DemoRepo } from "../../repos/demoRepo";
 import type { CoverageAssessment } from "../coverage/coverageCalculator";
-import type { ConflictAssessment, ConflictItem } from "../conflicts/conflictDetector";
+import type {
+  ConflictAssessment,
+  ConflictItem,
+} from "../conflicts/conflictDetector";
 import type { FairnessAssessment } from "../fairness/fairnessAnalyzer";
 import type { RiskReason } from "../scoring/riskScorer";
 
@@ -70,8 +73,17 @@ export function buildEvidenceBundle(args: {
   fairness: FairnessAssessment;
   reasons: RiskReason[];
 }): EvidenceBundle {
-  const { repo, requestId, teamId, roleId, band, coverage, conflicts, fairness, reasons } =
-    args;
+  const {
+    repo,
+    requestId,
+    teamId,
+    roleId,
+    band,
+    coverage,
+    conflicts,
+    fairness,
+    reasons,
+  } = args;
 
   const bundle: EvidenceBundle = { items: [], reasonEvidenceIds: {} };
 
@@ -85,7 +97,11 @@ export function buildEvidenceBundle(args: {
       reason.code === "coverage_exact_requirement"
     ) {
       push(bundle, reason.code, {
-        id: safeEvidenceId([requestId, "coverage_requirement", coverage.evidence.requirementId ?? "unknown"]),
+        id: safeEvidenceId([
+          requestId,
+          "coverage_requirement",
+          coverage.evidence.requirementId ?? "unknown",
+        ]),
         requestId,
         sourceType: "coverage_requirement",
         title: `${teamName}: ${roleName} coverage requirement`,
@@ -181,7 +197,11 @@ export function buildEvidenceBundle(args: {
 
   if (fairness.evidence.fairnessHistoryId) {
     push(bundle, null, {
-      id: safeEvidenceId([requestId, "fairness_history", fairness.evidence.fairnessHistoryId]),
+      id: safeEvidenceId([
+        requestId,
+        "fairness_history",
+        fairness.evidence.fairnessHistoryId,
+      ]),
       requestId,
       sourceType: "fairness_history",
       title: "Balance signals (context only)",

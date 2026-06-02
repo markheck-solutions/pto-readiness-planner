@@ -34,7 +34,9 @@ export type DemoRepo = {
   seedScenarios: DemoSeedScenario[];
 };
 
-export function getDemoRepo(dataset: DemoSeedDataset = demoSeedDataset): DemoRepo {
+export function getDemoRepo(
+  dataset: DemoSeedDataset = demoSeedDataset,
+): DemoRepo {
   return {
     meta: {
       datasetVersion: DEMO_DATASET_VERSION,

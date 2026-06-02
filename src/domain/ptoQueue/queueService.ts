@@ -47,7 +47,10 @@ function overlaps(
   return !(a.end < b.start || b.end < a.start);
 }
 
-function filterByDateRange(req: DemoPtoRequest, range: { start: IsoDate; end: IsoDate }) {
+function filterByDateRange(
+  req: DemoPtoRequest,
+  range: { start: IsoDate; end: IsoDate },
+) {
   return overlaps(
     { start: req.requestedStartDate, end: req.requestedEndDate },
     range,
@@ -88,7 +91,10 @@ export function buildQueue(args: { repo: DemoRepo; filters: QueueFilters }) {
 
     if (filters.coverageBand && assessment.band !== filters.coverageBand)
       continue;
-    if (filters.conflictLevel && assessment.conflicts.level !== filters.conflictLevel)
+    if (
+      filters.conflictLevel &&
+      assessment.conflicts.level !== filters.conflictLevel
+    )
       continue;
 
     const topReason = assessment.reasons[0] ?? {
@@ -130,7 +136,9 @@ export function buildQueue(args: { repo: DemoRepo; filters: QueueFilters }) {
       total: items.length,
       filters: {
         ...filters,
-        ...(dateRange ? { startDate: dateRange.start, endDate: dateRange.end } : {}),
+        ...(dateRange
+          ? { startDate: dateRange.start, endDate: dateRange.end }
+          : {}),
       },
     },
     items,

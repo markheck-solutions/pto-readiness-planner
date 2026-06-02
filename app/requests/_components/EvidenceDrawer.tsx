@@ -254,7 +254,8 @@ export function EvidenceDrawer({
                       <div>
                         <dt className="font-medium">Date range</dt>
                         <dd>
-                          {formatDate(item.dateRange.start)} to {formatDate(item.dateRange.end)}
+                          {formatDate(item.dateRange.start)} to{" "}
+                          {formatDate(item.dateRange.end)}
                         </dd>
                       </div>
                     ) : null}

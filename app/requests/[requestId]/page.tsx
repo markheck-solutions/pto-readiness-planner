@@ -1,6 +1,10 @@
 import Link from "next/link";
 
 import { DemoNotice } from "../../_components/DemoNotice";
+import {
+  LoadingStateSkeleton,
+  SafeStatePanel,
+} from "../../_components/SafeStatePanel";
 
 import type { IsoDate } from "../../../src/domain/dates";
 import { createAssessmentForRequest } from "../../../src/domain/assessment/createRequestAssessment";
@@ -12,6 +16,14 @@ import {
   getDemoRepo,
 } from "../../../src/repos/demoRepo";
 import { RequestDetailClient } from "../_components/RequestDetailClient";
+
+type SearchParams = Record<string, string | string[] | undefined>;
+type DetailPreviewState = "no-selection" | "loading" | "error";
+
+function asString(value: string | string[] | undefined): string | undefined {
+  if (!value) return undefined;
+  return Array.isArray(value) ? value[0] : value;
+}
 
 function overlaps(
   a: { start: IsoDate; end: IsoDate },
@@ -48,12 +60,139 @@ function employeeAvailableForRange(
   return true;
 }
 
+function getDetailPreviewState(
+  value: string | undefined,
+): DetailPreviewState | null {
+  if (value === "no-selection") return "no-selection";
+  if (value === "loading") return "loading";
+  if (value === "error") return "error";
+  return null;
+}
+
+function RequestDetailStatePreview({
+  state,
+  requestId,
+}: {
+  state: DetailPreviewState;
+  requestId: string;
+}) {
+  const liveHref = `/requests/${requestId}`;
+
+  if (state === "no-selection") {
+    return (
+      <SafeStatePanel
+        label="Request detail no-selection preview"
+        title="Choose a request to inspect coverage reasoning"
+        description="This safe state shows the detail surface before a queue row is selected. Recommendation, fairness, evidence, and backup sections stay hidden until a request is opened."
+        tone="neutral"
+        actions={[
+          { href: "/requests", label: "Open PTO request queue" },
+          {
+            href: liveHref,
+            label: "Open a live request detail",
+            variant: "secondary",
+          },
+        ]}
+        bullets={[
+          "Use the queue or the heatmap to choose the next request to review.",
+          "No stale employee, score, or conflict details remain visible in this state.",
+        ]}
+      />
+    );
+  }
+
+  if (state === "loading") {
+    return (
+      <SafeStatePanel
+        label="Request detail loading preview"
+        title="Loading request detail"
+        description="The selected request is still loading. Final recommendation, conflict, and fairness content stays hidden until the full detail record is ready."
+        tone="info"
+        role="status"
+        ariaLive="polite"
+        actions={[
+          { href: liveHref, label: "Return to the live request" },
+          {
+            href: "/requests",
+            label: "Back to the queue",
+            variant: "secondary",
+          },
+        ]}
+      >
+        <LoadingStateSkeleton cards={3} className="lg:grid-cols-1" />
+      </SafeStatePanel>
+    );
+  }
+
+  return (
+    <SafeStatePanel
+      label="Request detail error preview"
+      title="Request detail is temporarily unavailable"
+      description="The request detail could not be refreshed right now. Retry the live request or return to the queue while this surface recovers."
+      tone="danger"
+      role="alert"
+      ariaLive="assertive"
+      actions={[
+        { href: liveHref, label: "Retry this request" },
+        {
+          href: "/requests",
+          label: "Back to the queue",
+          variant: "secondary",
+        },
+      ]}
+      bullets={[
+        "The fallback avoids raw errors, stack traces, and partial seeded details.",
+        "Queue navigation stays available so managers do not reach a dead end.",
+      ]}
+    />
+  );
+}
+
 export default async function RequestDetailPage({
   params,
+  searchParams,
 }: {
   params: { requestId: string } | Promise<{ requestId: string }>;
+  searchParams?: SearchParams | Promise<SearchParams>;
 }) {
   const { requestId } = await Promise.resolve(params);
+  const sp = await Promise.resolve(searchParams ?? {});
+  const previewState = getDetailPreviewState(asString(sp.state));
+
+  if (previewState) {
+    return (
+      <div className="mx-auto w-full max-w-5xl px-6 py-10 sm:py-14">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <div className="text-xs text-zinc-600 dark:text-zinc-400">
+              <Link
+                href="/requests"
+                className="underline underline-offset-4 hover:text-zinc-950 dark:hover:text-zinc-50"
+              >
+                PTO requests
+              </Link>{" "}
+              <span aria-hidden="true">/</span> Request detail
+            </div>
+            <h1 className="mt-2 text-2xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-3xl">
+              Request detail
+            </h1>
+          </div>
+        </div>
+
+        <div className="mt-6">
+          <DemoNotice compact />
+        </div>
+
+        <div className="mt-8">
+          <RequestDetailStatePreview
+            state={previewState}
+            requestId={requestId}
+          />
+        </div>
+      </div>
+    );
+  }
+
   const repo = getDemoRepo();
   const req = findPtoRequestById(repo, requestId);
 

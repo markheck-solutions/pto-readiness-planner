@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 
 import { jsonError, methodNotAllowed } from "../../../../src/api/safeError";
-import { getDemoRepo, findPtoRequestById } from "../../../../src/repos/demoRepo";
+import {
+  getDemoRepo,
+  findPtoRequestById,
+} from "../../../../src/repos/demoRepo";
 
 function parseBooleanEnv(
   value: string | undefined,
@@ -33,7 +36,11 @@ export async function GET(
   const team = repo.teams.find((t) => t.id === employee.teamId);
   const role = repo.roles.find((r) => r.id === employee.roleId);
   if (!team || !role) {
-    return jsonError(500, "internal_error", "Seed data is missing team or role.");
+    return jsonError(
+      500,
+      "internal_error",
+      "Seed data is missing team or role.",
+    );
   }
 
   return NextResponse.json(

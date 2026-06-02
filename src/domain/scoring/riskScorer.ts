@@ -1,6 +1,9 @@
 import type { DemoCoverageBand, DemoRecommendation } from "../../demo/dataset";
 import type { CoverageAssessment } from "../coverage/coverageCalculator";
-import type { ConflictAssessment, ConflictItem } from "../conflicts/conflictDetector";
+import type {
+  ConflictAssessment,
+  ConflictItem,
+} from "../conflicts/conflictDetector";
 import type { FairnessAssessment } from "../fairness/fairnessAnalyzer";
 
 export type RiskReason = {
@@ -93,7 +96,8 @@ export function scoreRisk(args: {
     breakdown.singlePersonExposure = 25;
     reasons.push({
       code: "single_person_role_exposure",
-      summary: "This role has single-person coverage. If approved, there is no backup in the same role for at least one day.",
+      summary:
+        "This role has single-person coverage. If approved, there is no backup in the same role for at least one day.",
     });
   }
 
@@ -102,7 +106,8 @@ export function scoreRisk(args: {
     breakdown.criticalWindows = cwScore;
     reasons.push({
       code: "critical_window_overlap",
-      summary: "The requested dates overlap a critical window where coverage gaps have outsized impact.",
+      summary:
+        "The requested dates overlap a critical window where coverage gaps have outsized impact.",
     });
   }
 
@@ -110,7 +115,8 @@ export function scoreRisk(args: {
     breakdown.overlappingAbsence = 10;
     reasons.push({
       code: "overlapping_absence",
-      summary: "An existing absence overlaps the requested dates for the same role, increasing coverage pressure.",
+      summary:
+        "An existing absence overlaps the requested dates for the same role, increasing coverage pressure.",
     });
   }
 
@@ -118,7 +124,8 @@ export function scoreRisk(args: {
     breakdown.overlappingRequest = 10;
     reasons.push({
       code: "overlapping_request",
-      summary: "Another request overlaps the same role and dates. Confirm the plan before stacking approvals.",
+      summary:
+        "Another request overlaps the same role and dates. Confirm the plan before stacking approvals.",
     });
   }
 
@@ -126,7 +133,8 @@ export function scoreRisk(args: {
     breakdown.shortNotice = 5;
     reasons.push({
       code: "short_notice",
-      summary: "Short notice reduces time to staff handoffs and confirm backup coverage.",
+      summary:
+        "Short notice reduces time to staff handoffs and confirm backup coverage.",
     });
   }
 

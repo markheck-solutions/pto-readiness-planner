@@ -3,7 +3,11 @@
 import Link from "next/link";
 
 import { useBrowserDecision } from "../_components/BrowserDecisionProvider";
-import { DecisionBadge, RecommendationBadge, RiskBadge } from "../_components/StatusBadges";
+import {
+  DecisionBadge,
+  RecommendationBadge,
+  RiskBadge,
+} from "../_components/StatusBadges";
 
 import type { DemoRecommendation } from "../../src/demo/dataset";
 import { parseIsoDate, type IsoDate } from "../../src/domain/dates";
@@ -33,7 +37,9 @@ function QueueRow({ item }: { item: QueueTableRow }) {
             className="underline underline-offset-4 hover:text-zinc-700 dark:hover:text-zinc-200"
           >
             {item.employee.displayName}{" "}
-            <span className="text-zinc-500 dark:text-zinc-400">({item.id})</span>
+            <span className="text-zinc-500 dark:text-zinc-400">
+              ({item.id})
+            </span>
           </Link>
         </div>
         <div className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">

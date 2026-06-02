@@ -57,5 +57,8 @@ export function buildEvidenceForRequest(args: {
     reasons: scored.reasons,
   });
 
-  return { items: evidence.items, evidenceRefs: evidence.items.map((i) => i.id) };
+  return {
+    items: evidence.items,
+    evidenceRefs: evidence.items.map((i) => i.id),
+  };
 }

@@ -160,7 +160,9 @@ describe("public PTO APIs", () => {
   });
 
   it("GET /api/calendar-heatmap, /api/coverage, /api/critical-windows return safe JSON", async () => {
-    const heatmap = await heatmapGET(makeReq("/api/calendar-heatmap?range=next-8-weeks"));
+    const heatmap = await heatmapGET(
+      makeReq("/api/calendar-heatmap?range=next-8-weeks"),
+    );
     expect(heatmap.status).toBe(200);
     const h = asRecord((await heatmap.json()) as unknown);
     const cells = asArray(h.cells);
@@ -172,14 +174,18 @@ describe("public PTO APIs", () => {
       }),
     );
 
-    const coverage = await coverageGET(makeReq("/api/coverage?teamId=team_customer_support"));
+    const coverage = await coverageGET(
+      makeReq("/api/coverage?teamId=team_customer_support"),
+    );
     expect(coverage.status).toBe(200);
     const c = asRecord((await coverage.json()) as unknown);
     const rows = asArray(c.rows).map(asRecord);
     expect(
       rows.some(
         (r) =>
-          r.comparison === "below" || r.comparison === "exact" || r.comparison === "above",
+          r.comparison === "below" ||
+          r.comparison === "exact" ||
+          r.comparison === "above",
       ),
     ).toBe(true);
 
@@ -206,7 +212,9 @@ describe("public PTO APIs", () => {
   });
 
   it("GET /api/evidence resolves evidence by ids", async () => {
-    const baseline = await evidenceGET(makeReq("/api/evidence?requestId=REQ-1004"));
+    const baseline = await evidenceGET(
+      makeReq("/api/evidence?requestId=REQ-1004"),
+    );
     expect(baseline.status).toBe(200);
     const baselineJson = asRecord((await baseline.json()) as unknown);
     const first = asRecord(asArray(baselineJson.items)[0]);

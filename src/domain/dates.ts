@@ -61,10 +61,10 @@ export function rangesOverlapInclusive(a: {
   return (b) => !(a.end < b.start || b.end < a.start);
 }
 
-export function normalizeDateRange(range: {
+export function normalizeDateRange(range: { start: IsoDate; end: IsoDate }): {
   start: IsoDate;
   end: IsoDate;
-}): { start: IsoDate; end: IsoDate } {
+} {
   if (range.start <= range.end) return range;
   return { start: range.end, end: range.start };
 }

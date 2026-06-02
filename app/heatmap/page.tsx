@@ -1,6 +1,10 @@
 import Link from "next/link";
 
 import { DemoNotice } from "../_components/DemoNotice";
+import {
+  LoadingStateSkeleton,
+  SafeStatePanel,
+} from "../_components/SafeStatePanel";
 import { CoverageBadge, RiskBadge } from "../_components/StatusBadges";
 
 import type { DemoCoverageBand } from "../../src/demo/dataset";
@@ -17,6 +21,7 @@ import { buildQueue } from "../../src/domain/ptoQueue/queueService";
 import { getDemoRepo } from "../../src/repos/demoRepo";
 
 type SearchParams = Record<string, string | string[] | undefined>;
+type HeatmapPreviewState = "loading" | "empty" | "error";
 
 function asString(value: string | string[] | undefined): string | undefined {
   if (!value) return undefined;
@@ -54,14 +59,191 @@ function requestRangeHref(startDate: IsoDate, endDate: IsoDate): string {
   return `/requests?${params.toString()}`;
 }
 
+function getHeatmapPreviewState(
+  value: string | undefined,
+): HeatmapPreviewState | null {
+  if (value === "loading") return "loading";
+  if (value === "empty") return "empty";
+  if (value === "error") return "error";
+  return null;
+}
+
+function liveHeatmapHref(weekStart: string | undefined): string {
+  if (weekStart && isIsoDate(weekStart)) {
+    const params = new URLSearchParams();
+    params.set("weekStart", weekStart);
+    return `/heatmap?${params.toString()}`;
+  }
+
+  return "/heatmap";
+}
+
+function HeatmapStatePreview({
+  state,
+  liveHref,
+}: {
+  state: HeatmapPreviewState;
+  liveHref: string;
+}) {
+  if (state === "loading") {
+    return (
+      <div className="mt-8 grid gap-6 lg:grid-cols-2">
+        <SafeStatePanel
+          label="Heatmap loading preview"
+          title="Loading the coverage heatmap"
+          description="The selected coverage window is still loading. Final week bands stay hidden until the heatmap is ready, which avoids mixing live cells with placeholder data."
+          tone="info"
+          role="status"
+          ariaLive="polite"
+          actions={[
+            { href: liveHref, label: "Return to the live heatmap" },
+            {
+              href: "/requests?status=pending&sort=risk&dir=desc",
+              label: "Open PTO request queue",
+              variant: "secondary",
+            },
+          ]}
+        >
+          <LoadingStateSkeleton cards={4} className="lg:grid-cols-2" />
+        </SafeStatePanel>
+
+        <SafeStatePanel
+          label="Coverage matrix loading preview"
+          title="Preparing the role coverage matrix"
+          description="Required and available coverage counts are still being assembled for the selected week."
+          tone="info"
+          role="status"
+          ariaLive="polite"
+          actions={[
+            { href: liveHref, label: "Return to the live heatmap" },
+            {
+              href: "/requests?status=pending&sort=risk&dir=desc",
+              label: "Review the queue while this loads",
+              variant: "secondary",
+            },
+          ]}
+        >
+          <LoadingStateSkeleton cards={3} className="lg:grid-cols-1" />
+        </SafeStatePanel>
+      </div>
+    );
+  }
+
+  if (state === "empty") {
+    return (
+      <div className="mt-8 grid gap-6 lg:grid-cols-2">
+        <SafeStatePanel
+          label="Heatmap empty-state preview"
+          title="No coverage windows match this view"
+          description="There are no seeded coverage periods to plot for the current filter or preview. Managers can reset to the live range or jump straight to the full queue."
+          tone="neutral"
+          actions={[
+            { href: liveHref, label: "Return to the live heatmap" },
+            {
+              href: "/requests?status=pending&sort=risk&dir=desc",
+              label: "Open the full queue",
+              variant: "secondary",
+            },
+          ]}
+          bullets={[
+            "The empty state keeps the page informative instead of leaving a blank grid.",
+            "No stale week badges or pressure reasons remain on screen while this state is active.",
+          ]}
+        />
+
+        <SafeStatePanel
+          label="Coverage matrix empty-state preview"
+          title="No coverage rows are available for this selection"
+          description="Pick a live week again to restore role-by-role required and available coverage counts."
+          tone="neutral"
+          actions={[
+            { href: liveHref, label: "Reload a live week" },
+            {
+              href: "/requests?status=pending&sort=risk&dir=desc",
+              label: "Review queue priorities",
+              variant: "secondary",
+            },
+          ]}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-8 grid gap-6 lg:grid-cols-2">
+      <SafeStatePanel
+        label="Heatmap error preview"
+        title="Heatmap data is temporarily unavailable"
+        description="The coverage map could not be refreshed right now. Retry the live heatmap or use another safe route while this surface recovers."
+        tone="danger"
+        role="alert"
+        ariaLive="assertive"
+        actions={[
+          { href: liveHref, label: "Retry the live heatmap" },
+          {
+            href: "/requests?status=pending&sort=risk&dir=desc",
+            label: "Open PTO request queue",
+            variant: "secondary",
+          },
+        ]}
+      />
+
+      <SafeStatePanel
+        label="Coverage matrix error preview"
+        title="Coverage matrix is temporarily unavailable"
+        description="Required versus available role coverage could not be shown for this selection, so final counts remain hidden until the live view is available again."
+        tone="danger"
+        role="alert"
+        ariaLive="assertive"
+        actions={[
+          { href: liveHref, label: "Retry the live heatmap" },
+          {
+            href: "/",
+            label: "Return to manager overview",
+            variant: "secondary",
+          },
+        ]}
+      />
+    </div>
+  );
+}
+
 export default async function HeatmapPage({
   searchParams,
 }: {
   searchParams?: SearchParams | Promise<SearchParams>;
 }) {
-  const repo = getDemoRepo();
   const sp = await Promise.resolve(searchParams ?? {});
   const weekStartRaw = asString(sp.weekStart);
+  const previewState = getHeatmapPreviewState(asString(sp.state));
+
+  if (previewState) {
+    return (
+      <div className="mx-auto w-full max-w-5xl px-6 py-10 sm:py-14">
+        <div className="max-w-3xl">
+          <h1 className="text-2xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-3xl">
+            Coverage heatmap
+          </h1>
+          <p className="mt-3 text-sm leading-6 text-zinc-700 dark:text-zinc-300">
+            A manager-friendly snapshot of upcoming coverage pressure. Select a
+            week to inspect pressure reasons, coverage matrix rows, and matching
+            request context.
+          </p>
+        </div>
+
+        <div className="mt-6">
+          <DemoNotice compact />
+        </div>
+
+        <HeatmapStatePreview
+          state={previewState}
+          liveHref={liveHeatmapHref(weekStartRaw)}
+        />
+      </div>
+    );
+  }
+
+  const repo = getDemoRepo();
 
   const heatmap = buildCalendarHeatmap({ repo, preset: "next-8-weeks" });
 
@@ -107,7 +289,8 @@ export default async function HeatmapPage({
   let selectionNotice: string | null = null;
   if (weekStartRaw) {
     if (!isIsoDate(weekStartRaw)) {
-      selectionNotice = "The selected week was not valid. Showing the first available week.";
+      selectionNotice =
+        "The selected week was not valid. Showing the first available week.";
     } else if (
       weekStartRaw < heatmap.range.startDate ||
       weekStartRaw > heatmap.range.endDate
@@ -222,7 +405,9 @@ export default async function HeatmapPage({
                     Pressure reasons
                   </div>
                   {week.reasons.length === 0 ? (
-                    <p className="mt-1">No elevated pressure signals in this week.</p>
+                    <p className="mt-1">
+                      No elevated pressure signals in this week.
+                    </p>
                   ) : (
                     <ul className="mt-1 list-disc space-y-1 pl-5">
                       {week.reasons.map((reason) => (
@@ -240,7 +425,10 @@ export default async function HeatmapPage({
         </div>
       </section>
 
-      <section aria-label="Selected week" className="mt-10 grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+      <section
+        aria-label="Selected week"
+        className="mt-10 grid gap-6 lg:grid-cols-[1.2fr_0.8fr]"
+      >
         <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/40">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
@@ -248,7 +436,8 @@ export default async function HeatmapPage({
                 Selected week
               </h2>
               <p className="mt-1 text-sm leading-6 text-zinc-700 dark:text-zinc-300">
-                {formatShortDay(selectedWeekStart)} to {formatShortDay(selectedWeekEnd)}
+                {formatShortDay(selectedWeekStart)} to{" "}
+                {formatShortDay(selectedWeekEnd)}
               </p>
             </div>
             <RiskBadge band={selectedWeekBand} />
@@ -306,15 +495,24 @@ export default async function HeatmapPage({
                       >
                         {item.employee.displayName} ({item.id})
                       </Link>
-                      <RiskBadge band={item.assessment.band} score={item.assessment.score} />
+                      <RiskBadge
+                        band={item.assessment.band}
+                        score={item.assessment.score}
+                      />
                     </div>
                     <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-zinc-700 dark:text-zinc-300">
                       <span className="font-medium">{item.team.name}</span>
-                      <span className="text-zinc-500 dark:text-zinc-400" aria-hidden="true">
+                      <span
+                        className="text-zinc-500 dark:text-zinc-400"
+                        aria-hidden="true"
+                      >
                         ·
                       </span>
                       <span>{item.role.name}</span>
-                      <span className="text-zinc-500 dark:text-zinc-400" aria-hidden="true">
+                      <span
+                        className="text-zinc-500 dark:text-zinc-400"
+                        aria-hidden="true"
+                      >
                         ·
                       </span>
                       <span>{item.assessment.topReason.summary}</span>
@@ -363,14 +561,19 @@ export default async function HeatmapPage({
                         {row.roleName}
                       </div>
                       <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                        {formatShortDay(selectedWeekStart)} to {formatShortDay(selectedWeekEnd)}
+                        {formatShortDay(selectedWeekStart)} to{" "}
+                        {formatShortDay(selectedWeekEnd)}
                       </div>
                     </td>
                     <td className="px-3 py-3 text-zinc-700 dark:text-zinc-300">
-                      <span className="font-mono tabular-nums">{row.required}</span>
+                      <span className="font-mono tabular-nums">
+                        {row.required}
+                      </span>
                     </td>
                     <td className="px-3 py-3 text-zinc-700 dark:text-zinc-300">
-                      <span className="font-mono tabular-nums">{row.minAvailable}</span>
+                      <span className="font-mono tabular-nums">
+                        {row.minAvailable}
+                      </span>
                     </td>
                     <td className="px-3 py-3">
                       <CoverageBadge

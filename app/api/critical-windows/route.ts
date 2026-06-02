@@ -62,7 +62,15 @@ export async function GET(request: Request) {
     .filter((w) => (teamId ? w.teamId === teamId : true))
     .filter((w) => overlaps(range, { start: w.startDate, end: w.endDate }))
     .slice()
-    .sort((a, b) => (a.startDate === b.startDate ? (a.id < b.id ? -1 : 1) : a.startDate < b.startDate ? -1 : 1));
+    .sort((a, b) =>
+      a.startDate === b.startDate
+        ? a.id < b.id
+          ? -1
+          : 1
+        : a.startDate < b.startDate
+          ? -1
+          : 1,
+    );
 
   return NextResponse.json(
     {

@@ -11,7 +11,10 @@ describe("deterministic request assessment scenarios", () => {
     for (const scenario of demoSeedDataset.scenarios) {
       const req =
         repo.ptoRequests.find((r) => r.id === scenario.requestId) ?? null;
-      expect(req, `missing request for scenario: ${scenario.id}`).not.toBeNull();
+      expect(
+        req,
+        `missing request for scenario: ${scenario.id}`,
+      ).not.toBeNull();
       if (!req) continue;
 
       const emp = repo.employees.find((e) => e.id === req.employeeId) ?? null;

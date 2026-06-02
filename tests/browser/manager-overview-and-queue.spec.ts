@@ -62,7 +62,9 @@ test("queue supports filters, sorting, and safe recovery states", async ({
     page.getByText("Start date must be on or before end date."),
   ).toBeVisible();
 
-  await page.goto("/requests?teamId=team_customer_support&coverageBand=healthy");
+  await page.goto(
+    "/requests?teamId=team_customer_support&coverageBand=healthy",
+  );
   await expect(
     page.getByText("No requests match the current filters."),
   ).toBeVisible();

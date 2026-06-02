@@ -4,7 +4,10 @@ import { DemoNotice } from "../_components/DemoNotice";
 import { QueueResultsTable, type QueueTableRow } from "./QueueResultsTable";
 
 import { isIsoDate, type IsoDate } from "../../src/domain/dates";
-import { buildQueue, type QueueItem } from "../../src/domain/ptoQueue/queueService";
+import {
+  buildQueue,
+  type QueueItem,
+} from "../../src/domain/ptoQueue/queueService";
 import type {
   DemoCoverageBand,
   DemoRequestStatus,
@@ -30,7 +33,9 @@ function conflictRank(level: QueueItem["assessment"]["conflictLevel"]): number {
   return 0;
 }
 
-function recommendationRank(rec: QueueItem["assessment"]["recommendation"]): number {
+function recommendationRank(
+  rec: QueueItem["assessment"]["recommendation"],
+): number {
   if (rec === "defer") return 3;
   if (rec === "needs_discussion") return 2;
   if (rec === "approve_with_coverage_actions") return 1;
@@ -47,8 +52,7 @@ function sortItems(
     if (key === "start_date") {
       if (a.requestedStartDate !== b.requestedStartDate)
         return (
-          direction *
-          (a.requestedStartDate < b.requestedStartDate ? -1 : 1)
+          direction * (a.requestedStartDate < b.requestedStartDate ? -1 : 1)
         );
       if (a.id !== b.id) return a.id < b.id ? -1 : 1;
       return 0;
@@ -63,7 +67,9 @@ function sortItems(
       return a.id < b.id ? -1 : 1;
     }
     if (key === "conflict") {
-      const delta = conflictRank(a.assessment.conflictLevel) - conflictRank(b.assessment.conflictLevel);
+      const delta =
+        conflictRank(a.assessment.conflictLevel) -
+        conflictRank(b.assessment.conflictLevel);
       if (delta !== 0) return direction * delta;
       if (a.assessment.score !== b.assessment.score)
         return direction * (a.assessment.score - b.assessment.score);
@@ -73,10 +79,7 @@ function sortItems(
     if (a.assessment.score !== b.assessment.score)
       return direction * (a.assessment.score - b.assessment.score);
     if (a.requestedStartDate !== b.requestedStartDate)
-      return (
-        direction *
-        (a.requestedStartDate < b.requestedStartDate ? -1 : 1)
-      );
+      return direction * (a.requestedStartDate < b.requestedStartDate ? -1 : 1);
     return a.id < b.id ? -1 : 1;
   });
 }
@@ -122,15 +125,19 @@ export default async function RequestsPage({
   if (roleIdRaw && !role) errors.push("Unknown role filter.");
 
   const requestTypeAllowed = ["pto", "training"] as const;
-  const requestType = requestTypeRaw && requestTypeAllowed.includes(requestTypeRaw as DemoRequestType)
-    ? (requestTypeRaw as DemoRequestType)
-    : undefined;
-  if (requestTypeRaw && !requestType) errors.push("Invalid request type filter.");
+  const requestType =
+    requestTypeRaw &&
+    requestTypeAllowed.includes(requestTypeRaw as DemoRequestType)
+      ? (requestTypeRaw as DemoRequestType)
+      : undefined;
+  if (requestTypeRaw && !requestType)
+    errors.push("Invalid request type filter.");
 
   const statusAllowed = ["pending", "approved", "withdrawn"] as const;
-  const status = statusRaw && statusAllowed.includes(statusRaw as DemoRequestStatus)
-    ? (statusRaw as DemoRequestStatus)
-    : undefined;
+  const status =
+    statusRaw && statusAllowed.includes(statusRaw as DemoRequestStatus)
+      ? (statusRaw as DemoRequestStatus)
+      : undefined;
   if (statusRaw && !status) errors.push("Invalid status filter.");
 
   const bandAllowed = ["healthy", "thin", "risky", "critical"] as const;
@@ -138,7 +145,8 @@ export default async function RequestsPage({
     coverageBandRaw && bandAllowed.includes(coverageBandRaw as DemoCoverageBand)
       ? (coverageBandRaw as DemoCoverageBand)
       : undefined;
-  if (coverageBandRaw && !coverageBand) errors.push("Invalid coverage risk filter.");
+  if (coverageBandRaw && !coverageBand)
+    errors.push("Invalid coverage risk filter.");
 
   const conflictAllowed = ["none", "low", "medium", "high"] as const;
   const conflictLevel =
@@ -166,14 +174,25 @@ export default async function RequestsPage({
     }
   }
 
-  const sortAllowed = ["risk", "start_date", "recommendation", "conflict"] as const;
-  const sortKey = sortAllowed.includes(sortKeyRaw as (typeof sortAllowed)[number])
+  const sortAllowed = [
+    "risk",
+    "start_date",
+    "recommendation",
+    "conflict",
+  ] as const;
+  const sortKey = sortAllowed.includes(
+    sortKeyRaw as (typeof sortAllowed)[number],
+  )
     ? (sortKeyRaw as (typeof sortAllowed)[number])
     : "risk";
-  if (sortKeyRaw && !sortAllowed.includes(sortKeyRaw as (typeof sortAllowed)[number]))
+  if (
+    sortKeyRaw &&
+    !sortAllowed.includes(sortKeyRaw as (typeof sortAllowed)[number])
+  )
     errors.push("Invalid sort key.");
 
-  const sortDir = sortDirRaw === "asc" || sortDirRaw === "desc" ? sortDirRaw : "desc";
+  const sortDir =
+    sortDirRaw === "asc" || sortDirRaw === "desc" ? sortDirRaw : "desc";
   if (sortDirRaw && sortDirRaw !== "asc" && sortDirRaw !== "desc")
     errors.push("Invalid sort direction.");
 
@@ -216,14 +235,38 @@ export default async function RequestsPage({
   });
 
   const activeFilters: Array<{ label: string; key: string }> = [];
-  if (teamIdRaw) activeFilters.push({ label: `Team: ${team?.name ?? teamIdRaw}`, key: "teamId" });
-  if (roleIdRaw) activeFilters.push({ label: `Role: ${role?.name ?? roleIdRaw}`, key: "roleId" });
-  if (requestTypeRaw) activeFilters.push({ label: `Type: ${requestTypeRaw}`, key: "requestType" });
-  if (statusRaw) activeFilters.push({ label: `Status: ${statusRaw}`, key: "status" });
-  if (coverageBandRaw) activeFilters.push({ label: `Risk: ${coverageBandRaw}`, key: "coverageBand" });
-  if (conflictLevelRaw) activeFilters.push({ label: `Conflicts: ${conflictLevelRaw}`, key: "conflictLevel" });
+  if (teamIdRaw)
+    activeFilters.push({
+      label: `Team: ${team?.name ?? teamIdRaw}`,
+      key: "teamId",
+    });
+  if (roleIdRaw)
+    activeFilters.push({
+      label: `Role: ${role?.name ?? roleIdRaw}`,
+      key: "roleId",
+    });
+  if (requestTypeRaw)
+    activeFilters.push({
+      label: `Type: ${requestTypeRaw}`,
+      key: "requestType",
+    });
+  if (statusRaw)
+    activeFilters.push({ label: `Status: ${statusRaw}`, key: "status" });
+  if (coverageBandRaw)
+    activeFilters.push({
+      label: `Risk: ${coverageBandRaw}`,
+      key: "coverageBand",
+    });
+  if (conflictLevelRaw)
+    activeFilters.push({
+      label: `Conflicts: ${conflictLevelRaw}`,
+      key: "conflictLevel",
+    });
   if (startDateRaw && endDateRaw)
-    activeFilters.push({ label: `Dates: ${startDateRaw} to ${endDateRaw}`, key: "dateRange" });
+    activeFilters.push({
+      label: `Dates: ${startDateRaw} to ${endDateRaw}`,
+      key: "dateRange",
+    });
 
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-10 sm:py-14">
@@ -241,8 +284,9 @@ export default async function RequestsPage({
           PTO request queue
         </h1>
         <p className="mt-3 text-sm leading-6 text-zinc-700 dark:text-zinc-300">
-          Filter and sort requests to focus manager time on coverage readiness. This is a public
-          demo with fictional data only. Actions are simulation only and reset on refresh.
+          Filter and sort requests to focus manager time on coverage readiness.
+          This is a public demo with fictional data only. Actions are simulation
+          only and reset on refresh.
         </p>
       </div>
 
@@ -531,7 +575,8 @@ export default async function RequestsPage({
               No requests match the current filters.
             </p>
             <p className="mt-2">
-              Try clearing filters, broadening the date range, or selecting a different team.
+              Try clearing filters, broadening the date range, or selecting a
+              different team.
             </p>
             <div className="mt-4">
               <Link
