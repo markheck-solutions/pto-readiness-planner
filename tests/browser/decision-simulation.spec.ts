@@ -3,7 +3,9 @@ import { expect, test } from "@playwright/test";
 test("simulated decisions round-trip through the queue without stale demoDecision URLs", async ({
   page,
 }) => {
-  await page.goto("/requests?status=pending&sort=risk&dir=desc&demoDecision=approve");
+  await page.goto(
+    "/requests?status=pending&sort=risk&dir=desc&demoDecision=approve",
+  );
 
   const sessionFilter = page.getByLabel("Demo decision filter");
   await expect.poll(() => page.url()).not.toContain("demoDecision=");
@@ -33,7 +35,9 @@ test("simulated decisions round-trip through the queue without stale demoDecisio
   await page.getByRole("link", { name: "PTO requests" }).click();
   await expect.poll(() => page.url()).not.toContain("demoDecision=");
   await sessionFilter.selectOption("approve");
-  await expect(page.getByText("Showing 1 request.", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Showing 1 request.", { exact: true }),
+  ).toBeVisible();
   await expect(
     queueRow.getByLabel("Simulated decision: Approved in demo"),
   ).toBeVisible();
@@ -50,7 +54,9 @@ test("simulated decisions round-trip through the queue without stale demoDecisio
   await page.getByRole("link", { name: "PTO requests" }).click();
   await expect.poll(() => page.url()).not.toContain("demoDecision=");
   await expect(sessionFilter).toHaveValue("ask_for_coverage");
-  await expect(page.getByText("Showing 1 request.", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Showing 1 request.", { exact: true }),
+  ).toBeVisible();
   await expect(
     queueRow.getByLabel("Simulated decision: Ask for coverage in demo"),
   ).toBeVisible();
@@ -92,7 +98,9 @@ test("simulated decisions never persist through public APIs and reset on refresh
   await page.getByRole("link", { name: "PTO requests" }).click();
   const sessionFilter = page.getByLabel("Demo decision filter");
   await sessionFilter.selectOption("defer");
-  await expect(page.getByText("Showing 1 request.", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Showing 1 request.", { exact: true }),
+  ).toBeVisible();
 
   await page.reload();
   await expect(sessionFilter).toHaveValue("");

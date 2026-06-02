@@ -116,6 +116,7 @@ async function main() {
     "Default branch assumptions",
     "Secrets and demo safety",
     "http://127.0.0.1:3102",
+    "npm run test:browser:smoke",
   ]);
   all.push(...readmeChecks);
   const readmeOk = summarize(readmeChecks);
@@ -139,6 +140,8 @@ async function main() {
     "GitHub Actions",
     "Default branch assumption",
     "Secret handling",
+    ".github/workflows/qa.yml",
+    ".github/workflows/droid-wiki-refresh.yml",
   ]);
   all.push(...runbookChecks);
   const runbookOk = summarize(runbookChecks);

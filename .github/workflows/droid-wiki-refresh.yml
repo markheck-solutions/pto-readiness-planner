@@ -1,0 +1,72 @@
+name: Droid Wiki Refresh
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  wiki-refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      FACTORY_API_KEY: ${{ secrets.FACTORY_API_KEY }}
+      NEXT_PUBLIC_DEMO_MODE: "true"
+      AI_PROVIDER: mock
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check Factory integration availability
+        id: factory
+        run: |
+          if [ -z "${FACTORY_API_KEY}" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::FACTORY_API_KEY is not configured. Skipping wiki refresh."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Node
+        if: steps.factory.outputs.skip == 'false'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        if: steps.factory.outputs.skip == 'false'
+        run: npm ci
+
+      - name: Install Factory Droid
+        if: steps.factory.outputs.skip == 'false'
+        run: |
+          curl -fsSL https://app.factory.ai/cli | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Generate wiki
+        if: steps.factory.outputs.skip == 'false'
+        id: generate-wiki
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          droid exec --cwd "$GITHUB_WORKSPACE" --auto high "/wiki" 2>&1 | tee droid-wiki-output.log
+
+      - name: Report wiki refresh failure
+        if: steps.factory.outputs.skip == 'false' && steps.generate-wiki.outcome == 'failure'
+        run: |
+          echo "::warning::Factory Wiki refresh failed. Review the droid-wiki-output artifact and confirm the repository integration is still healthy."
+
+      - name: Upload wiki diagnostics
+        if: always() && steps.factory.outputs.skip == 'false'
+        uses: actions/upload-artifact@v4
+        with:
+          name: droid-wiki-output
+          path: droid-wiki-output.log
+          if-no-files-found: warn
+          retention-days: 14

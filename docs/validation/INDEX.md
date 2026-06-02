@@ -28,6 +28,14 @@ Browser tests:
 npm run test:browser
 ```
 
+Browser smoke:
+
+```bash
+npm run test:browser:smoke
+```
+
+For deployed smoke, set `PLAYWRIGHT_BASE_URL` to the HTTPS URL and `PLAYWRIGHT_SKIP_WEBSERVER=1` before running the smoke suite.
+
 ## Evidence capture notes
 
 When capturing validation evidence, record:

@@ -1,0 +1,102 @@
+project: pto-readiness-planner
+package_manager: npm
+framework:
+  app: Next.js
+  next: 16
+  react: 19
+  language: TypeScript
+
+environments:
+  local:
+    url: http://127.0.0.1:3102
+    strategy: local_dev_server
+    start_command: npm run dev
+    health_check: /api/health
+    required_for:
+      - pull_request_branch_code
+      - local_regression
+    restrictions:
+      - read_only
+      - branch_code_target_for_pull_requests
+  production:
+    url: provided-via-workflow-input
+    strategy: smoke_consistency_only
+    health_check: /api/health
+    required_for:
+      - production_smoke
+      - consistency_check
+    restrictions:
+      - read_only
+      - never_replace_local_pr_testing
+
+default_target:
+  primary: local
+  smoke: production
+  rule: Test local branch code first. Run production smoke only when an HTTPS URL is provided.
+
+auth:
+  method: none
+  provider: none
+
+commands:
+  dev: npm run dev
+  build: npm run build
+  browser: npm run test:browser
+  browser_smoke: npm run test:browser:smoke
+  readiness_report: npm run readiness-report
+  safety: npm run safety
+
+required_env:
+  runtime_defaults:
+    NEXT_PUBLIC_DEMO_MODE: "true"
+    AI_PROVIDER: mock
+    CI: "true"
+
+personas:
+  - name: sdm-reviewer
+    description: Reviews first-visit manager value, coverage risk context, and practical next actions.
+  - name: operations-manager
+    description: Reviews queue, heatmap, request detail, evidence, and simulation flows.
+  - name: it-security-reviewer
+    description: Reviews no-login posture, read-only APIs, controlled errors, and no secret leakage.
+  - name: keyboard-user
+    description: Reviews keyboard navigation, focus recovery, and clear state transitions.
+
+critical_flows:
+  - overview_and_queue
+  - heatmap_detail_evidence
+  - simulation_and_draft
+  - read_only_api
+  - invalid_input_recovery
+  - production_smoke_when_provided
+
+apps:
+  web:
+    path_patterns:
+      - app/**
+      - public/**
+      - tests/browser/**
+      - src/**
+    skill: qa-web
+    test_tool: agent-browser
+  api:
+    path_patterns:
+      - app/api/**
+      - scripts/**
+      - tests/unit/**
+      - src/**
+    skill: qa-api
+    test_tool: curl
+
+integrations:
+  hosting:
+    provider: Vercel
+    production_url: supplied at workflow dispatch time
+  drafts:
+    routine_provider: mock
+    optional_local_provider:
+      scope: local_only
+      env_names:
+        - OPENAI_COMPATIBLE_BASE_URL
+        - OPENAI_COMPATIBLE_API_KEY
+        - OPENAI_COMPATIBLE_MODEL

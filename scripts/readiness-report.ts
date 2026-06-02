@@ -60,26 +60,52 @@ function printSection(s: Section) {
   for (const line of s.lines) console.log(line);
 }
 
-function checkFileGate(
-  files: string[],
-  opts?: { allowMissing?: boolean },
-): {
+function checkFileGate(files: string[]): {
   status: SectionStatus;
   lines: string[];
 } {
-  const allowMissing = opts?.allowMissing ?? false;
   const missing = files.filter((f) => !exists(f));
-  if (missing.length === 0)
+  if (missing.length === 0) {
     return { status: "PASS", lines: files.map((f) => `- ${f}`) };
+  }
 
   return {
-    status: allowMissing ? "WARN" : "FAIL",
+    status: "FAIL",
     lines: [
       "- Missing:",
       ...missing.map((f) => `  - ${f}`),
       "",
       "- Present:",
       ...files.filter((f) => exists(f)).map((f) => `  - ${f}`),
+    ],
+  };
+}
+
+function checkWorkflowMarkers(
+  filePath: string,
+  requiredSubstrings: string[],
+): { status: SectionStatus; lines: string[] } {
+  if (!exists(filePath)) {
+    return {
+      status: "FAIL",
+      lines: [`- Missing required workflow: ${filePath}`],
+    };
+  }
+
+  const text = readText(filePath);
+  const missing = requiredSubstrings.filter((marker) => !text.includes(marker));
+  if (missing.length === 0) {
+    return {
+      status: "PASS",
+      lines: [`- ${filePath} includes expected workflow markers`],
+    };
+  }
+
+  return {
+    status: "FAIL",
+    lines: [
+      `- ${filePath} is missing expected markers:`,
+      ...missing.map((marker) => `  - ${marker}`),
     ],
   };
 }
@@ -237,24 +263,31 @@ function parseAuditCounts(jsonText: string): {
 }
 
 function computeReadinessLevel(sections: Section[]): number {
-  const hasDocs = sections.some(
-    (s) =>
-      s.title === "Docs and reviewer surfaces present" && s.status === "PASS",
-  );
-  const hasCi = sections.some(
-    (s) => s.title === "CI workflow present" && s.status === "PASS",
-  );
-  const hasScripts = sections.some(
-    (s) =>
-      s.title === "Local validation commands (npm scripts)" &&
-      s.status === "PASS",
-  );
+  const failed = sections.some((section) => section.status === "FAIL");
+  if (failed) return 0;
 
-  if (!hasDocs || !hasCi) return 1;
-  if (!hasScripts) return 2;
+  const requiredForLevelFour = new Set([
+    "Local validation commands (npm scripts)",
+    "CI validation wiring",
+    "QA workflow wiring",
+    "CodeQL workflow",
+    "Wiki refresh workflow",
+    "Dependabot configuration",
+    "QA skill surfaces",
+    "Docs and reviewer surfaces present",
+    "Environment contract (.env.example)",
+    "Secret hygiene (.gitignore)",
+    "Playwright smoke flexibility",
+    "Safety scan coverage",
+  ]);
 
-  // Level 3+ requires QA/wiki automation which is intentionally deferred.
-  return 2;
+  const hasAllLevelFourRequirements = sections.every((section) => {
+    if (!requiredForLevelFour.has(section.title)) return true;
+    return section.status === "PASS";
+  });
+
+  if (hasAllLevelFourRequirements) return 4;
+  return 3;
 }
 
 async function main() {
@@ -274,8 +307,11 @@ async function main() {
 
   sections.push(
     section("Install expectation mapping", "PASS", [
-      "- /install-qa equivalent: deferred to hardening milestone",
-      "- /install-wiki equivalent: deferred to hardening milestone",
+      "- /install-qa equivalent:",
+      "  - .factory/skills/qa plus qa-web and qa-api",
+      "  - .github/workflows/qa.yml for local regression and optional production smoke",
+      "- /install-wiki equivalent:",
+      "  - .github/workflows/droid-wiki-refresh.yml",
       "- /readiness-report equivalent:",
       "  - npm script: npm run readiness-report",
       "  - implementation: scripts/readiness-report.ts",
@@ -302,6 +338,7 @@ async function main() {
       "readme:verify",
       "readiness-report",
       "test:browser",
+      "test:browser:smoke",
       "db:seed",
     ];
 
@@ -329,26 +366,65 @@ async function main() {
   }
 
   // CI present
-  const ciGate = checkFileGate([".github/workflows/ci.yml"]);
-  sections.push(section("CI workflow present", ciGate.status, ciGate.lines));
+  const ciGate = checkWorkflowMarkers(".github/workflows/ci.yml", [
+    "npm ci",
+    "npm run format:check",
+    "npm run lint",
+    "npm run typecheck",
+    "npm run test:coverage",
+    "npm run build",
+    "npm run safety",
+    "npm run quality:check",
+    "npm run readme:verify",
+    "npm run readiness-report",
+  ]);
+  sections.push(section("CI validation wiring", ciGate.status, ciGate.lines));
 
-  // Deferred maturity surfaces (WARN for now)
-  const deferred = checkFileGate(
+  const qaWorkflow = checkWorkflowMarkers(".github/workflows/qa.yml", [
+    "workflow_dispatch",
+    "base_url",
+    "npm ci",
+    "npx playwright install chromium --with-deps",
+    "npm run test:browser",
+    "npm run test:browser:smoke",
+    "PLAYWRIGHT_BASE_URL",
+    "PLAYWRIGHT_SKIP_WEBSERVER",
+    "master",
+  ]);
+  sections.push(
+    section("QA workflow wiring", qaWorkflow.status, qaWorkflow.lines),
+  );
+
+  const codeql = checkWorkflowMarkers(".github/workflows/codeql.yml", [
+    "security-events: write",
+    "github/codeql-action/init@v4",
+    "javascript-typescript",
+    "master",
+  ]);
+  sections.push(section("CodeQL workflow", codeql.status, codeql.lines));
+
+  const wikiWorkflow = checkWorkflowMarkers(
+    ".github/workflows/droid-wiki-refresh.yml",
     [
-      ".github/workflows/codeql.yml",
-      ".github/workflows/qa.yml",
-      ".github/workflows/droid-wiki-refresh.yml",
-      ".github/dependabot.yml",
+      "workflow_dispatch",
+      "master",
+      "contents: read",
+      "FACTORY_API_KEY",
+      "npm ci",
+      "/wiki",
     ],
-    { allowMissing: true },
   );
   sections.push(
-    section("Deferred automation (hardening milestone)", deferred.status, [
-      ...deferred.lines,
-      "",
-      "- Note:",
-      "  - CodeQL, Dependabot, QA workflow, and wiki refresh are intentionally not required for this scaffold feature.",
-    ]),
+    section("Wiki refresh workflow", wikiWorkflow.status, wikiWorkflow.lines),
+  );
+
+  const dependabot = checkTextIncludesGate(".github/dependabot.yml", [
+    'package-ecosystem: "npm"',
+    'package-ecosystem: "github-actions"',
+    'interval: "weekly"',
+  ]);
+  sections.push(
+    section("Dependabot configuration", dependabot.status, dependabot.lines),
   );
 
   const branchAssumption = workflowBranchAssumptionChecks();
@@ -383,7 +459,9 @@ async function main() {
     "NEXT_PUBLIC_DEMO_MODE=true",
     "AI_PROVIDER=mock",
     "DATABASE_URL=",
+    "OPENAI_COMPATIBLE_BASE_URL=",
     "OPENAI_COMPATIBLE_API_KEY=",
+    "OPENAI_COMPATIBLE_MODEL=",
     "OPENAI_COMPATIBLE_MODEL=",
   ]);
   sections.push(
@@ -400,6 +478,66 @@ async function main() {
   ]);
   sections.push(
     section("Secret hygiene (.gitignore)", ignoreGate.status, ignoreGate.lines),
+  );
+
+  const qaSkillGate = checkFileGate([
+    ".factory/skills/qa/SKILL.md",
+    ".factory/skills/qa/config.yaml",
+    ".factory/skills/qa/REPORT-TEMPLATE.md",
+    ".factory/skills/qa-web/SKILL.md",
+    ".factory/skills/qa-api/SKILL.md",
+  ]);
+  sections.push(
+    section("QA skill surfaces", qaSkillGate.status, qaSkillGate.lines),
+  );
+
+  const playwrightLines: string[] = [];
+  const playwrightFailures: string[] = [];
+  const packageScripts = readPackageJsonScripts();
+  if (!packageScripts.ok) {
+    playwrightFailures.push(packageScripts.reason);
+  } else if (!packageScripts.scripts["test:browser:smoke"]) {
+    playwrightFailures.push("package.json missing script: test:browser:smoke");
+  } else {
+    playwrightLines.push("- package.json includes npm run test:browser:smoke");
+  }
+
+  const playwrightConfigGate = checkTextIncludesGate("playwright.config.ts", [
+    "PLAYWRIGHT_BASE_URL",
+    "PLAYWRIGHT_SKIP_WEBSERVER",
+  ]);
+  if (playwrightConfigGate.status === "FAIL") {
+    playwrightFailures.push(
+      ...playwrightConfigGate.lines.map((line) => line.replace(/^- /, "")),
+    );
+  } else {
+    playwrightLines.push(...playwrightConfigGate.lines);
+  }
+  sections.push(
+    section(
+      "Playwright smoke flexibility",
+      playwrightFailures.length === 0 ? "PASS" : "FAIL",
+      playwrightFailures.length === 0
+        ? playwrightLines
+        : playwrightFailures.map((line) => `- ${line}`),
+    ),
+  );
+
+  const safetyCoverage = checkTextIncludesGate("scripts/demo-safety-scan.ts", [
+    "REPO_SCAN_ROOTS",
+    ".factory",
+    "BUILD_SCAN_ROOTS",
+    ".next/static",
+    "ARTIFACT_SCAN_ROOTS",
+    "commit messages",
+    "git log",
+  ]);
+  sections.push(
+    section(
+      "Safety scan coverage",
+      safetyCoverage.status,
+      safetyCoverage.lines,
+    ),
   );
 
   // npm audit triage
@@ -453,10 +591,18 @@ async function main() {
   const failed = sections.filter((s) => s.status === "FAIL");
   const level = computeReadinessLevel(sections);
 
-  console.log(`Readiness level (scaffold): ${level}`);
+  console.log(`Readiness level: ${level}`);
+
+  if (failed.length === 0 && level >= 3) {
+    console.log("PASS: readiness-report gates satisfied.");
+    return;
+  }
 
   if (failed.length === 0) {
-    console.log("PASS: readiness-report gates satisfied for this scaffold.");
+    console.log(
+      "FAIL: readiness level did not reach 3 or 4 even though no section failed.",
+    );
+    process.exitCode = 1;
     return;
   }
 

@@ -46,7 +46,10 @@ npm run quality:check
 npm run readme:verify
 npm run readiness-report
 npm run test:browser
+npm run test:browser:smoke
 ```
+
+The smoke suite can target a deployed demo by setting `PLAYWRIGHT_BASE_URL` to the HTTPS URL and `PLAYWRIGHT_SKIP_WEBSERVER=1` before running `npm run test:browser:smoke`.
 
 ## Repo maturity surfaces (external review)
 
@@ -55,9 +58,14 @@ These files exist to help reviewers and future operators:
 - Operations runbook: `docs/runbooks/operations.md`
 - Validation index: `docs/validation/INDEX.md`
 - CI workflow: `.github/workflows/ci.yml`
+- QA workflow: `.github/workflows/qa.yml`
+- CodeQL workflow: `.github/workflows/codeql.yml`
+- Wiki refresh workflow: `.github/workflows/droid-wiki-refresh.yml`
+- Dependency updates: `.github/dependabot.yml`
 - PR template: `.github/pull_request_template.md`
 - Issue templates: `.github/ISSUE_TEMPLATE/`
 - Ownership: `.github/CODEOWNERS`
+- QA skill surfaces: `.factory/skills/qa/`, `.factory/skills/qa-web/`, `.factory/skills/qa-api/`
 
 ## Default branch assumptions
 

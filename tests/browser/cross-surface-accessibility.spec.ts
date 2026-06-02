@@ -57,7 +57,9 @@ test("heatmap, detail, and queue preserve the shared review filter contract", as
   await expect(page).toHaveURL(/endDate=2026-06-23/);
   await expect(page).toHaveURL(/sort=start_date/);
   await expect(page).toHaveURL(/dir=asc/);
-  await expect(page.getByText("Showing 1 request.", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Showing 1 request.", { exact: true }),
+  ).toBeVisible();
   await expect(
     page.getByRole("row", { name: /Taylor Nguyen.*REQ-1002A/ }),
   ).toBeVisible();

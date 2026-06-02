@@ -7,7 +7,9 @@ test("clear all resets the combined queue filters and drops stale review links",
   page,
   request,
 }) => {
-  const filteredApi = await request.get(`/api/pto-requests?${combinedFilterQuery}`);
+  const filteredApi = await request.get(
+    `/api/pto-requests?${combinedFilterQuery}`,
+  );
   expect(filteredApi.ok()).toBe(true);
   const filteredJson = (await filteredApi.json()) as {
     items: Array<{ id: string }>;
@@ -23,7 +25,9 @@ test("clear all resets the combined queue filters and drops stale review links",
 
   await page.goto(`/requests?${combinedFilterQuery}`);
 
-  await expect(page.getByText("Showing 1 request.", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Showing 1 request.", { exact: true }),
+  ).toBeVisible();
   await expect(
     page.getByRole("region", { name: "Review context" }),
   ).toContainText("Started from the selected heatmap week");
@@ -45,7 +49,9 @@ test("clear all resets the combined queue filters and drops stale review links",
     page.getByRole("region", { name: "Review context" }),
   ).toHaveCount(0);
   await expect(page.getByText("Active filters")).toHaveCount(0);
-  await expect(page.getByText("Showing 5 requests.", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Showing 5 requests.", { exact: true }),
+  ).toBeVisible();
 
   const detailHref = await page
     .getByRole("row", { name: /Jordan Kim.*REQ-1002/ })
@@ -94,7 +100,9 @@ test("empty-state reset clears the session demo decision filter and restores the
 
   await expect(page).toHaveURL(/\/requests$/);
   await expect(sessionFilter).toHaveValue("");
-  await expect(page.getByText("Showing 5 requests.", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Showing 5 requests.", { exact: true }),
+  ).toBeVisible();
   await expect(page.getByText("Active filters")).toHaveCount(0);
   await expect(
     page

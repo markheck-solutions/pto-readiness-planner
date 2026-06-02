@@ -97,7 +97,9 @@ export default async function RequestsPage({
   const conflictAllowed = ["none", "low", "medium", "high"] as const;
   const conflictLevel =
     conflictLevelRaw &&
-    conflictAllowed.includes(conflictLevelRaw as (typeof conflictAllowed)[number])
+    conflictAllowed.includes(
+      conflictLevelRaw as (typeof conflictAllowed)[number],
+    )
       ? (conflictLevelRaw as (typeof conflictAllowed)[number])
       : undefined;
   if (conflictLevelRaw && !conflictLevel)
@@ -547,10 +549,7 @@ export default async function RequestsPage({
       </section>
 
       <section aria-label="Queue results" className="mt-6">
-        <QueueResultsPanel
-          rows={rows}
-          clearAllHref="/requests"
-        />
+        <QueueResultsPanel rows={rows} clearAllHref="/requests" />
       </section>
     </div>
   );

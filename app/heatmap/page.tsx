@@ -71,7 +71,7 @@ function weekRangeHref(
   return buildReviewHref(
     "/heatmap",
     withSelectedWeekRange(query, weekStart, weekEnd),
-  )
+  );
 }
 
 function requestRangeHref(
@@ -82,7 +82,7 @@ function requestRangeHref(
   return buildReviewHref(
     "/requests",
     withDefaultQueueSort(withSelectedWeekRange(query, weekStart, weekEnd)),
-  )
+  );
 }
 
 function requestDetailHref(
@@ -94,7 +94,7 @@ function requestDetailHref(
   return buildReviewHref(
     `/requests/${requestId}`,
     withDefaultQueueSort(withSelectedWeekRange(query, weekStart, weekEnd)),
-  )
+  );
 }
 
 function getHeatmapPreviewState(
@@ -107,13 +107,13 @@ function getHeatmapPreviewState(
 }
 
 function liveHeatmapHref(query: ReviewFilterQuery): string {
-  const liveQuery = withWeekStartFromDateRange(query)
-  const weekStart = liveQuery.weekStart
+  const liveQuery = withWeekStartFromDateRange(query);
+  const weekStart = liveQuery.weekStart;
   if (weekStart && isIsoDate(weekStart)) {
-    return buildReviewHref("/heatmap", liveQuery)
+    return buildReviewHref("/heatmap", liveQuery);
   }
 
-  return buildReviewHref("/heatmap", query)
+  return buildReviewHref("/heatmap", query);
 }
 
 function HeatmapStatePreview({

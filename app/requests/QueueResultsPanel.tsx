@@ -21,12 +21,8 @@ export function QueueResultsPanel({
   rows,
   clearAllHref,
 }: QueueResultsPanelProps) {
-  const {
-    decisions,
-    decisionFilter,
-    setDecisionFilter,
-    clearDecisionFilter,
-  } = useBrowserDecisions();
+  const { decisions, decisionFilter, setDecisionFilter, clearDecisionFilter } =
+    useBrowserDecisions();
 
   const visibleRows = useMemo(
     () =>
@@ -74,21 +70,19 @@ export function QueueResultsPanel({
             aria-label="Demo decision filter"
             value={decisionFilter ?? ""}
             onChange={(event) => {
-              const nextValue = event.target.value as DemoDecision | ""
+              const nextValue = event.target.value as DemoDecision | "";
               if (!nextValue) {
-                clearDecisionFilter()
-                return
+                clearDecisionFilter();
+                return;
               }
-              setDecisionFilter(nextValue)
+              setDecisionFilter(nextValue);
             }}
             className="mt-1 w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-950 shadow-sm focus:outline-none focus:ring-2 focus:ring-zinc-300 dark:border-zinc-800 dark:bg-zinc-950/40 dark:text-zinc-50 dark:focus:ring-zinc-700"
           >
             <option value="">Any browser-session state</option>
             <option value="none">No simulated decision</option>
             <option value="approve">Approved in demo</option>
-            <option value="ask_for_coverage">
-              Ask for coverage in demo
-            </option>
+            <option value="ask_for_coverage">Ask for coverage in demo</option>
             <option value="defer">Deferred in demo</option>
           </select>
           <p className="mt-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">

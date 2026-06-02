@@ -18,15 +18,17 @@ export function SimulatedDecisionControls({
   } = useBrowserDecision(requestId);
   const bannerLabel = decisionActionLabel(decision);
 
-  const applyDecision = (nextDecision: "approve" | "ask_for_coverage" | "defer") => {
-    setDecision(requestId, nextDecision)
-    if (decisionFilter !== null) setDecisionFilter(nextDecision)
-  }
+  const applyDecision = (
+    nextDecision: "approve" | "ask_for_coverage" | "defer",
+  ) => {
+    setDecision(requestId, nextDecision);
+    if (decisionFilter !== null) setDecisionFilter(nextDecision);
+  };
 
   const resetDecision = () => {
-    clearDecision(requestId)
-    if (decisionFilter !== null) setDecisionFilter("none")
-  }
+    clearDecision(requestId);
+    if (decisionFilter !== null) setDecisionFilter("none");
+  };
 
   return (
     <section aria-label="Simulated decision controls">

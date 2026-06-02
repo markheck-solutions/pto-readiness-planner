@@ -11,7 +11,9 @@ import { GET as bootstrapGET } from "../../app/api/bootstrap/route";
 
 describe("seeded demo dataset", () => {
   it("includes a stable instruction-like seeded note that stays fictional and safe", () => {
-    const request = demoSeedDataset.ptoRequests.find((item) => item.id === "REQ-1001");
+    const request = demoSeedDataset.ptoRequests.find(
+      (item) => item.id === "REQ-1001",
+    );
 
     expect(demoSeedDataset.version).toBe("2026-06-02-demo-v3");
     expect(request).toBeTruthy();

@@ -81,10 +81,19 @@ function checkMaturityArtifacts(): CheckResult[] {
   const results: CheckResult[] = [];
   const required = [
     ".github/workflows/ci.yml",
+    ".github/workflows/qa.yml",
+    ".github/workflows/codeql.yml",
+    ".github/workflows/droid-wiki-refresh.yml",
+    ".github/dependabot.yml",
     ".github/CODEOWNERS",
     ".github/pull_request_template.md",
     ".github/ISSUE_TEMPLATE/bug_report.yml",
     ".github/ISSUE_TEMPLATE/readiness_task.yml",
+    ".factory/skills/qa/SKILL.md",
+    ".factory/skills/qa/config.yaml",
+    ".factory/skills/qa/REPORT-TEMPLATE.md",
+    ".factory/skills/qa-web/SKILL.md",
+    ".factory/skills/qa-api/SKILL.md",
     "docs/runbooks/operations.md",
     "docs/validation/INDEX.md",
     "scripts/readme-verify.ts",
@@ -93,6 +102,49 @@ function checkMaturityArtifacts(): CheckResult[] {
   ];
 
   for (const p of required) results.push(checkFilePresence(p));
+  return results;
+}
+
+function checkQaSmokeWiring(): CheckResult[] {
+  const results: CheckResult[] = [];
+
+  if (!exists("package.json")) {
+    results.push({ ok: false, reason: "Missing: package.json" });
+    return results;
+  }
+
+  try {
+    const packageJson = JSON.parse(readText("package.json")) as {
+      scripts?: Record<string, string>;
+    };
+    const smokeScript = packageJson.scripts?.["test:browser:smoke"];
+    if (!smokeScript) {
+      results.push({
+        ok: false,
+        reason: "package.json missing script: test:browser:smoke",
+      });
+    }
+  } catch (error: unknown) {
+    const message =
+      error instanceof Error ? error.message : "Failed to parse package.json";
+    results.push({ ok: false, reason: message });
+  }
+
+  const playwrightConfig = "playwright.config.ts";
+  if (!exists(playwrightConfig)) {
+    results.push({ ok: false, reason: `Missing: ${playwrightConfig}` });
+  } else {
+    const text = readText(playwrightConfig);
+    for (const marker of ["PLAYWRIGHT_BASE_URL", "PLAYWRIGHT_SKIP_WEBSERVER"]) {
+      if (!text.includes(marker)) {
+        results.push({
+          ok: false,
+          reason: `playwright.config.ts missing smoke marker: ${marker}`,
+        });
+      }
+    }
+  }
+
   return results;
 }
 
@@ -140,8 +192,13 @@ async function main() {
   all.push(...artifacts);
   const artifactsOk = summarize(artifacts);
 
+  printHeader("QA smoke wiring");
+  const qaSmoke = checkQaSmokeWiring();
+  all.push(...qaSmoke);
+  const qaSmokeOk = summarize(qaSmoke);
+
   printHeader("Result");
-  if (npmOnlyOk && ignoresOk && artifactsOk) {
+  if (npmOnlyOk && ignoresOk && artifactsOk && qaSmokeOk) {
     console.log("PASS: quality gates satisfied.");
     return;
   }

@@ -53,6 +53,14 @@ Browser test runner:
 npm run test:browser
 ```
 
+Browser smoke runner:
+
+```bash
+npm run test:browser:smoke
+```
+
+When you need to smoke a deployed demo, set `PLAYWRIGHT_BASE_URL` to the HTTPS URL and `PLAYWRIGHT_SKIP_WEBSERVER=1` before running the smoke suite.
+
 ## Deployment (Vercel)
 
 This repo is intended to deploy as a public demo:
@@ -83,6 +91,9 @@ Use your deployment provider rollback and confirm:
 CI runs on pull requests and pushes to the default branch. See:
 
 - `.github/workflows/ci.yml`
+- `.github/workflows/qa.yml`
+- `.github/workflows/codeql.yml`
+- `.github/workflows/droid-wiki-refresh.yml`
 
 ## Default branch assumption
 

@@ -1,0 +1,106 @@
+name: QA
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: Optional HTTPS base URL for production smoke
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qa-${{ github.event.pull_request.number || github.ref || 'manual' }}
+  cancel-in-progress: true
+
+jobs:
+  local-qa:
+    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.base_url == '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: "true"
+      NEXT_PUBLIC_DEMO_MODE: "true"
+      AI_PROVIDER: mock
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install chromium --with-deps
+
+      - name: Run local browser and API QA
+        run: npm run test:browser
+
+      - name: Upload QA artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-local-artifacts
+          path: |
+            test-results/
+            playwright-report/
+          if-no-files-found: warn
+          retention-days: 14
+
+  production-smoke:
+    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.base_url != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CI: "true"
+      NEXT_PUBLIC_DEMO_MODE: "true"
+      AI_PROVIDER: mock
+      PLAYWRIGHT_BASE_URL: ${{ github.event.inputs.base_url }}
+      PLAYWRIGHT_SKIP_WEBSERVER: "1"
+    steps:
+      - name: Validate production smoke URL
+        run: |
+          if [[ ! "${PLAYWRIGHT_BASE_URL}" =~ ^https:// ]]; then
+            echo "Expected an HTTPS base URL for production smoke."
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install chromium --with-deps
+
+      - name: Run production smoke QA
+        run: npm run test:browser:smoke
+
+      - name: Upload production smoke artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-production-smoke-artifacts
+          path: |
+            test-results/
+            playwright-report/
+          if-no-files-found: warn
+          retention-days: 14
