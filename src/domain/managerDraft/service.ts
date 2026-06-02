@@ -174,10 +174,16 @@ function buildMockDraft(
     context.requestedRange.start,
     context.requestedRange.end,
   );
-  const coverageLine =
-    context.coverage.minAvailable > context.coverage.required
-      ? `${context.roleName} coverage stays above the ${context.coverage.required}-person minimum for ${context.teamName}.`
-      : `${context.roleName} coverage stays at the ${context.coverage.required}-person minimum for ${context.teamName}.`;
+  let coverageLine = `${context.roleName} coverage stays at the ${context.coverage.required}-person minimum for ${context.teamName}.`;
+
+  if (context.coverage.minAvailable > context.coverage.required) {
+    coverageLine = `${context.roleName} coverage stays above the ${context.coverage.required}-person minimum for ${context.teamName}.`;
+  } else if (context.coverage.minAvailable < context.coverage.required) {
+    const shortfall = context.coverage.required - context.coverage.minAvailable;
+    const shortfallLabel = shortfall === 1 ? "1 person" : `${shortfall} people`;
+
+    coverageLine = `${context.roleName} coverage falls below the ${context.coverage.required}-person minimum for ${context.teamName} and would leave the team short by ${shortfallLabel} for this window.`;
+  }
   const backupLine =
     context.availableBackups.length > 0
       ? `Please line up ${context.availableBackups.join(", ")} as the backup for the handoff before the window starts.`

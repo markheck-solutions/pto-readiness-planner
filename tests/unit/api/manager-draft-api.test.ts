@@ -143,6 +143,59 @@ describe("POST /api/manager-draft", () => {
     expect(askDraft).not.toBe(deferDraft);
   });
 
+  it("distinguishes below-minimum, exact-minimum, and above-minimum mock approval coverage copy", async () => {
+    process.env.NEXT_PUBLIC_DEMO_MODE = "true";
+    process.env.AI_PROVIDER = "mock";
+
+    const belowMinimum = await draftPOST(
+      makeReq({
+        requestId: "REQ-1004",
+        action: "approve",
+      }),
+    );
+    const exactMinimum = await draftPOST(
+      makeReq({
+        requestId: "REQ-1001",
+        action: "approve_with_coverage_actions",
+      }),
+    );
+    const aboveMinimum = await draftPOST(
+      makeReq({
+        requestId: "REQ-1003",
+        action: "approve",
+      }),
+    );
+
+    expect(belowMinimum.status).toBe(200);
+    expect(exactMinimum.status).toBe(200);
+    expect(aboveMinimum.status).toBe(200);
+
+    const belowMinimumDraft = String(
+      asRecord((await belowMinimum.json()) as unknown).draft,
+    );
+    const exactMinimumDraft = String(
+      asRecord((await exactMinimum.json()) as unknown).draft,
+    );
+    const aboveMinimumDraft = String(
+      asRecord((await aboveMinimum.json()) as unknown).draft,
+    );
+
+    expect(belowMinimumDraft).toContain(
+      "falls below the 2-person minimum for Customer Support",
+    );
+    expect(belowMinimumDraft.toLowerCase()).toContain("short by 2 people");
+    expect(belowMinimumDraft).not.toContain(
+      "stays at the 2-person minimum for Customer Support",
+    );
+
+    expect(exactMinimumDraft).toContain(
+      "stays at the 1-person minimum for Release Operations",
+    );
+    expect(aboveMinimumDraft).toContain(
+      "stays above the 1-person minimum for Delivery",
+    );
+  });
+
   it("rejects unsafe override fields", async () => {
     process.env.NEXT_PUBLIC_DEMO_MODE = "true";
     process.env.AI_PROVIDER = "mock";
