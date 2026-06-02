@@ -96,6 +96,12 @@ function backupNote(option: BackupOption): string {
   return option.available ? option.note : `Not available: ${option.note}`;
 }
 
+function hasInstructionLikeContext(values: string[]): boolean {
+  return values.some((value) =>
+    /\b(ignore|announce|reveal|override|pretend|instruction)\b/i.test(value),
+  );
+}
+
 export function RequestDetailClient({
   request,
   employee,
@@ -110,6 +116,10 @@ export function RequestDetailClient({
   } | null>(null);
   const openerRef = useRef<HTMLButtonElement | null>(null);
   const { decision } = useBrowserDecision(request.id);
+  const showInstructionSafetyNote = hasInstructionLikeContext([
+    request.employeeNote,
+    request.managerContext,
+  ]);
 
   const availableBackups = backupOptions.filter((option) => option.available);
   const draftContext = buildSimulationDraftContext({
@@ -219,6 +229,18 @@ export function RequestDetailClient({
           <div className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
             Context notes
           </div>
+          {showInstructionSafetyNote ? (
+            <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-900/40 dark:bg-amber-950/40 dark:text-amber-100">
+              <div className="text-xs font-medium uppercase tracking-wide text-amber-800 dark:text-amber-200">
+                Safety note
+              </div>
+              <p className="mt-1 leading-6">
+                Instruction-like wording stays visible as fictional request
+                context only. Drafts treat it as untrusted data and do not
+                follow it.
+              </p>
+            </div>
+          ) : null}
           <div className="mt-2 grid gap-3 sm:grid-cols-2">
             <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700 dark:border-zinc-800 dark:bg-zinc-950/30 dark:text-zinc-300">
               <div className="text-xs font-medium text-zinc-600 dark:text-zinc-400">

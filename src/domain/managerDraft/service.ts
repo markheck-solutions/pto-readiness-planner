@@ -28,6 +28,8 @@ type ManagerDraftContext = {
   employeeName: string;
   teamName: string;
   roleName: string;
+  employeeNote: string;
+  managerContext: string;
   requestedRange: {
     start: IsoDate;
     end: IsoDate;
@@ -145,6 +147,8 @@ function buildContext(
     employeeName: employee.displayName,
     teamName: team.name,
     roleName: role.name,
+    employeeNote: request.employeeNote,
+    managerContext: request.managerContext,
     requestedRange,
     coverage: {
       required: assessment.coverage.required,
@@ -235,6 +239,8 @@ export async function generateManagerDraft(args: {
           employeeName: context.employeeName,
           teamName: context.teamName,
           roleName: context.roleName,
+          employeeNote: context.employeeNote,
+          managerContext: context.managerContext,
           requestedRangeLabel,
           band: context.coverage.band,
           recommendation: context.coverage.recommendation,

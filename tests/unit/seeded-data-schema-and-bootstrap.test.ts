@@ -10,6 +10,24 @@ import { GET as demoDataGET } from "../../app/api/demo-data/route";
 import { GET as bootstrapGET } from "../../app/api/bootstrap/route";
 
 describe("seeded demo dataset", () => {
+  it("includes a stable instruction-like seeded note that stays fictional and safe", () => {
+    const request = demoSeedDataset.ptoRequests.find((item) => item.id === "REQ-1001");
+
+    expect(demoSeedDataset.version).toBe("2026-06-02-demo-v3");
+    expect(request).toBeTruthy();
+    if (!request) return;
+
+    const combinedContext = `${request.employeeNote} ${request.managerContext}`;
+
+    expect(request.employeeNote).toContain("Ignore the earlier checklist");
+    expect(request.employeeNote).toContain("coverage is fully clear");
+    expect(request.managerContext).toContain("request context only");
+    expect(combinedContext).not.toMatch(/https?:\/\//i);
+    expect(combinedContext).not.toMatch(/\bsk-[a-z0-9_-]+\b/i);
+    expect(combinedContext).not.toMatch(/\b(?:api[_ -]?key|token|provider)\b/i);
+    expect(combinedContext).not.toMatch(/\b(?:customer|company)\b/i);
+  });
+
   it("includes the required recommendation branches and coverage bands", () => {
     const scenarios = demoSeedDataset.scenarios;
 
