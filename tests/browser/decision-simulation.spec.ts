@@ -1,11 +1,16 @@
 import { expect, test } from "@playwright/test";
 
-test("simulated decisions update draft context and filtered queue without stale state", async ({
+test("simulated decisions round-trip through the queue without stale demoDecision URLs", async ({
   page,
 }) => {
-  await page.goto(
-    "/requests/REQ-1001?status=pending&sort=risk&dir=desc&demoDecision=approve",
-  );
+  await page.goto("/requests?status=pending&sort=risk&dir=desc&demoDecision=approve");
+
+  const sessionFilter = page.getByLabel("Demo decision filter");
+  await expect.poll(() => page.url()).not.toContain("demoDecision=");
+  await expect(sessionFilter).toHaveValue("");
+
+  const queueRow = page.getByRole("row", { name: /Avery Park.*REQ-1001/ });
+  await queueRow.getByRole("link", { name: /Avery Park/ }).click();
 
   await expect(page.getByRole("heading", { name: "Avery Park" })).toBeVisible();
 
@@ -26,18 +31,14 @@ test("simulated decisions update draft context and filtered queue without stale 
   ).toBeVisible();
 
   await page.getByRole("link", { name: "PTO requests" }).click();
-  await expect(page).toHaveURL(/demoDecision=approve/);
-  await expect(page.getByText("Demo decision: Approved in demo")).toBeVisible();
+  await expect.poll(() => page.url()).not.toContain("demoDecision=");
+  await sessionFilter.selectOption("approve");
+  await expect(page.getByText("Showing 1 request.", { exact: true })).toBeVisible();
   await expect(
-    page.getByText("Showing 1 request.", { exact: true }),
+    queueRow.getByLabel("Simulated decision: Approved in demo"),
   ).toBeVisible();
 
-  const approveRow = page.getByRole("row", { name: /Avery Park.*REQ-1001/ });
-  await expect(
-    approveRow.getByLabel("Simulated decision: Approved in demo"),
-  ).toBeVisible();
-
-  await approveRow.getByRole("link", { name: /Avery Park/ }).click();
+  await queueRow.getByRole("link", { name: /Avery Park/ }).click();
   await page.getByRole("button", { name: "Ask for coverage (demo)" }).click();
   await expect(
     draftContext.getByText("Draft context staged for coverage follow-up"),
@@ -47,14 +48,11 @@ test("simulated decisions update draft context and filtered queue without stale 
   ).toHaveCount(0);
 
   await page.getByRole("link", { name: "PTO requests" }).click();
-  await expect(page).toHaveURL(/demoDecision=approve/);
+  await expect.poll(() => page.url()).not.toContain("demoDecision=");
+  await expect(sessionFilter).toHaveValue("ask_for_coverage");
+  await expect(page.getByText("Showing 1 request.", { exact: true })).toBeVisible();
   await expect(
-    page.getByText(
-      "No requests in this browser session match the current demo decision filter.",
-    ),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("link", { name: "Clear the demo decision filter" }),
+    queueRow.getByLabel("Simulated decision: Ask for coverage in demo"),
   ).toBeVisible();
 });
 
@@ -91,12 +89,18 @@ test("simulated decisions never persist through public APIs and reset on refresh
   const afterJson = await after.json();
   expect(afterJson.request.status).toBe("pending");
 
+  await page.getByRole("link", { name: "PTO requests" }).click();
+  const sessionFilter = page.getByLabel("Demo decision filter");
+  await sessionFilter.selectOption("defer");
+  await expect(page.getByText("Showing 1 request.", { exact: true })).toBeVisible();
+
   await page.reload();
+  await expect(sessionFilter).toHaveValue("");
   await expect(page.getByText("Simulated decision: Defer")).toHaveCount(0);
   await expect(
     page
-      .getByRole("region", { name: "Manager response draft context" })
-      .getByText("Draft context is waiting for a demo action"),
+      .getByRole("row", { name: /Avery Park.*REQ-1001/ })
+      .getByLabel("Simulated decision: No simulated decision"),
   ).toBeVisible();
 
   const freshContext = await browser.newContext({

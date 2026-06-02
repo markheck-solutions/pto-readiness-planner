@@ -27,14 +27,19 @@ export async function GET(request: Request) {
   }
 
   const teamId = url.searchParams.get("teamId");
+  const roleId = url.searchParams.get("roleId");
   if (teamId && !repo.teams.some((t) => t.id === teamId)) {
     return jsonError(400, "invalid_request", "Unknown teamId.", { teamId });
+  }
+  if (roleId && !repo.roles.some((r) => r.id === roleId)) {
+    return jsonError(400, "invalid_request", "Unknown roleId.", { roleId });
   }
 
   const heatmap = buildCalendarHeatmap({
     repo,
     preset: range,
     teamId,
+    roleId,
   });
 
   return NextResponse.json(

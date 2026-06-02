@@ -17,7 +17,20 @@ import {
 } from "../../src/domain/dates";
 import { buildCalendarHeatmap } from "../../src/domain/heatmap/heatmapBuilder";
 import { buildCoverageMatrix } from "../../src/domain/coverage/coverageMatrix";
-import { buildQueue } from "../../src/domain/ptoQueue/queueService";
+import {
+  buildQueue,
+  queueSortKeys,
+  sortQueueItems,
+} from "../../src/domain/ptoQueue/queueService";
+import {
+  buildReviewHref,
+  readReviewFilterQuery,
+  withDefaultQueueSort,
+  withSelectedWeekRange,
+  withWeekStartFromDateRange,
+  withoutSelectedWeekRange,
+  type ReviewFilterQuery,
+} from "../../src/domain/reviewFilters";
 import { getDemoRepo } from "../../src/repos/demoRepo";
 
 type SearchParams = Record<string, string | string[] | undefined>;
@@ -50,36 +63,38 @@ function bandLabel(band: DemoCoverageBand): string {
   return "Healthy";
 }
 
-function weekRangeHref(weekStart: IsoDate): string {
-  const params = new URLSearchParams();
-  params.set("weekStart", weekStart);
-  return `/heatmap?${params.toString()}`;
+function weekRangeHref(
+  query: ReviewFilterQuery,
+  weekStart: IsoDate,
+  weekEnd: IsoDate,
+): string {
+  return buildReviewHref(
+    "/heatmap",
+    withSelectedWeekRange(query, weekStart, weekEnd),
+  )
 }
 
-function requestRangeHref(startDate: IsoDate, endDate: IsoDate): string {
-  const params = new URLSearchParams();
-  params.set("weekStart", startDate);
-  params.set("startDate", startDate);
-  params.set("endDate", endDate);
-  params.set("status", "pending");
-  params.set("sort", "risk");
-  params.set("dir", "desc");
-  return `/requests?${params.toString()}`;
+function requestRangeHref(
+  query: ReviewFilterQuery,
+  weekStart: IsoDate,
+  weekEnd: IsoDate,
+): string {
+  return buildReviewHref(
+    "/requests",
+    withDefaultQueueSort(withSelectedWeekRange(query, weekStart, weekEnd)),
+  )
 }
 
 function requestDetailHref(
+  query: ReviewFilterQuery,
   requestId: string,
   weekStart: IsoDate,
   weekEnd: IsoDate,
 ): string {
-  const params = new URLSearchParams();
-  params.set("weekStart", weekStart);
-  params.set("startDate", weekStart);
-  params.set("endDate", weekEnd);
-  params.set("status", "pending");
-  params.set("sort", "risk");
-  params.set("dir", "desc");
-  return `/requests/${requestId}?${params.toString()}`;
+  return buildReviewHref(
+    `/requests/${requestId}`,
+    withDefaultQueueSort(withSelectedWeekRange(query, weekStart, weekEnd)),
+  )
 }
 
 function getHeatmapPreviewState(
@@ -91,22 +106,24 @@ function getHeatmapPreviewState(
   return null;
 }
 
-function liveHeatmapHref(weekStart: string | undefined): string {
+function liveHeatmapHref(query: ReviewFilterQuery): string {
+  const liveQuery = withWeekStartFromDateRange(query)
+  const weekStart = liveQuery.weekStart
   if (weekStart && isIsoDate(weekStart)) {
-    const params = new URLSearchParams();
-    params.set("weekStart", weekStart);
-    return `/heatmap?${params.toString()}`;
+    return buildReviewHref("/heatmap", liveQuery)
   }
 
-  return "/heatmap";
+  return buildReviewHref("/heatmap", query)
 }
 
 function HeatmapStatePreview({
   state,
   liveHref,
+  queueHref,
 }: {
   state: HeatmapPreviewState;
   liveHref: string;
+  queueHref: string;
 }) {
   if (state === "loading") {
     return (
@@ -121,7 +138,7 @@ function HeatmapStatePreview({
           actions={[
             { href: liveHref, label: "Return to the live heatmap" },
             {
-              href: "/requests?status=pending&sort=risk&dir=desc",
+              href: queueHref,
               label: "Open PTO request queue",
               variant: "secondary",
             },
@@ -140,7 +157,7 @@ function HeatmapStatePreview({
           actions={[
             { href: liveHref, label: "Return to the live heatmap" },
             {
-              href: "/requests?status=pending&sort=risk&dir=desc",
+              href: queueHref,
               label: "Review the queue while this loads",
               variant: "secondary",
             },
@@ -163,7 +180,7 @@ function HeatmapStatePreview({
           actions={[
             { href: liveHref, label: "Return to the live heatmap" },
             {
-              href: "/requests?status=pending&sort=risk&dir=desc",
+              href: queueHref,
               label: "Open the full queue",
               variant: "secondary",
             },
@@ -182,7 +199,7 @@ function HeatmapStatePreview({
           actions={[
             { href: liveHref, label: "Reload a live week" },
             {
-              href: "/requests?status=pending&sort=risk&dir=desc",
+              href: queueHref,
               label: "Review queue priorities",
               variant: "secondary",
             },
@@ -204,7 +221,7 @@ function HeatmapStatePreview({
         actions={[
           { href: liveHref, label: "Retry the live heatmap" },
           {
-            href: "/requests?status=pending&sort=risk&dir=desc",
+            href: queueHref,
             label: "Open PTO request queue",
             variant: "secondary",
           },
@@ -237,7 +254,8 @@ export default async function HeatmapPage({
   searchParams?: SearchParams | Promise<SearchParams>;
 }) {
   const sp = await Promise.resolve(searchParams ?? {});
-  const weekStartRaw = asString(sp.weekStart);
+  const reviewQuery = withWeekStartFromDateRange(readReviewFilterQuery(sp));
+  const weekStartRaw = reviewQuery.weekStart;
   const previewState = getHeatmapPreviewState(asString(sp.state));
 
   if (previewState) {
@@ -260,7 +278,11 @@ export default async function HeatmapPage({
 
         <HeatmapStatePreview
           state={previewState}
-          liveHref={liveHeatmapHref(weekStartRaw)}
+          liveHref={liveHeatmapHref(reviewQuery)}
+          queueHref={buildReviewHref(
+            "/requests",
+            withDefaultQueueSort(withoutSelectedWeekRange(reviewQuery)),
+          )}
         />
       </div>
     );
@@ -268,7 +290,12 @@ export default async function HeatmapPage({
 
   const repo = getDemoRepo();
 
-  const heatmap = buildCalendarHeatmap({ repo, preset: "next-8-weeks" });
+  const heatmap = buildCalendarHeatmap({
+    repo,
+    preset: "next-8-weeks",
+    teamId: reviewQuery.teamId,
+    roleId: reviewQuery.roleId,
+  });
 
   const weeks: Array<{
     weekStart: IsoDate;
@@ -349,15 +376,47 @@ export default async function HeatmapPage({
   const coverageRows = buildCoverageMatrix({
     repo,
     range: { start: selectedWeekStart, end: selectedWeekEnd },
+    teamId: reviewQuery.teamId,
+    roleId: reviewQuery.roleId,
   });
 
   const selectedQueue = buildQueue({
     repo,
     filters: {
+      teamId: reviewQuery.teamId,
+      roleId: reviewQuery.roleId,
+      requestType: reviewQuery.requestType as "pto" | "training" | undefined,
+      status: reviewQuery.status as
+        | "pending"
+        | "approved"
+        | "withdrawn"
+        | undefined,
+      coverageBand: reviewQuery.coverageBand as
+        | "healthy"
+        | "thin"
+        | "risky"
+        | "critical"
+        | undefined,
+      conflictLevel: reviewQuery.conflictLevel as
+        | "none"
+        | "low"
+        | "medium"
+        | "high"
+        | undefined,
       startDate: selectedWeekStart,
       endDate: selectedWeekEnd,
     },
   });
+  const selectedQueueSort = withDefaultQueueSort(reviewQuery);
+  const selectedQueueItems = sortQueueItems(
+    selectedQueue.items,
+    queueSortKeys.includes(
+      selectedQueueSort.sort as (typeof queueSortKeys)[number],
+    )
+      ? (selectedQueueSort.sort as (typeof queueSortKeys)[number])
+      : "risk",
+    selectedQueueSort.dir === "asc" ? "asc" : "desc",
+  );
 
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-10 sm:py-14">
@@ -412,7 +471,7 @@ export default async function HeatmapPage({
             return (
               <Link
                 key={week.weekStart}
-                href={weekRangeHref(week.weekStart)}
+                href={weekRangeHref(reviewQuery, week.weekStart, week.weekEnd)}
                 aria-current={selected ? "page" : undefined}
                 aria-label={[
                   `Week of ${formatShortDay(week.weekStart)}.`,
@@ -494,13 +553,20 @@ export default async function HeatmapPage({
 
           <div className="mt-4 flex flex-wrap gap-3">
             <Link
-              href={requestRangeHref(selectedWeekStart, selectedWeekEnd)}
+              href={requestRangeHref(
+                reviewQuery,
+                selectedWeekStart,
+                selectedWeekEnd,
+              )}
               className="inline-flex items-center justify-center rounded-full bg-zinc-950 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
             >
               Open queue for this window
             </Link>
             <Link
-              href="/requests?status=pending&sort=risk&dir=desc"
+              href={buildReviewHref(
+                "/requests",
+                withDefaultQueueSort(withoutSelectedWeekRange(reviewQuery)),
+              )}
               className="inline-flex items-center justify-center rounded-full border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-950 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-50 dark:hover:bg-zinc-900"
             >
               Open the full queue
@@ -511,13 +577,13 @@ export default async function HeatmapPage({
             <div className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
               Matching requests in this week
             </div>
-            {selectedQueue.items.length === 0 ? (
+            {selectedQueueItems.length === 0 ? (
               <p className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">
                 No requests overlap this selected week in the demo set.
               </p>
             ) : (
               <ul className="mt-3 space-y-3">
-                {selectedQueue.items.slice(0, 3).map((item) => (
+                {selectedQueueItems.slice(0, 3).map((item) => (
                   <li
                     key={item.id}
                     className="rounded-lg border border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950/20"
@@ -525,6 +591,7 @@ export default async function HeatmapPage({
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <Link
                         href={requestDetailHref(
+                          reviewQuery,
                           item.id,
                           selectedWeekStart,
                           selectedWeekEnd,

@@ -7,8 +7,15 @@ import { type QueueTableRow } from "./QueueResultsTable";
 import { isIsoDate, parseIsoDate, type IsoDate } from "../../src/domain/dates";
 import {
   buildQueue,
-  type QueueItem,
+  queueSortKeys,
+  sortQueueItems,
 } from "../../src/domain/ptoQueue/queueService";
+import {
+  buildReviewHref,
+  readReviewFilterQuery,
+  writeReviewFilterQuery,
+  type ReviewFilterQuery,
+} from "../../src/domain/reviewFilters";
 import type {
   DemoCoverageBand,
   DemoRequestStatus,
@@ -19,80 +26,8 @@ import {
   findTeamById,
   getDemoRepo,
 } from "../../src/repos/demoRepo";
-import { decisionLabel, type DemoDecision } from "../../src/domain/simulation";
 
 type SearchParams = Record<string, string | string[] | undefined>;
-
-function asString(value: string | string[] | undefined): string | undefined {
-  if (!value) return undefined;
-  return Array.isArray(value) ? value[0] : value;
-}
-
-function conflictRank(level: QueueItem["assessment"]["conflictLevel"]): number {
-  if (level === "high") return 3;
-  if (level === "medium") return 2;
-  if (level === "low") return 1;
-  return 0;
-}
-
-function recommendationRank(
-  rec: QueueItem["assessment"]["recommendation"],
-): number {
-  if (rec === "defer") return 3;
-  if (rec === "needs_discussion") return 2;
-  if (rec === "approve_with_coverage_actions") return 1;
-  return 0;
-}
-
-function sortItems(
-  items: QueueItem[],
-  key: string,
-  dir: "asc" | "desc",
-): QueueItem[] {
-  const direction = dir === "asc" ? 1 : -1;
-  return items.slice().sort((a, b) => {
-    if (key === "start_date") {
-      if (a.requestedStartDate !== b.requestedStartDate)
-        return (
-          direction * (a.requestedStartDate < b.requestedStartDate ? -1 : 1)
-        );
-      if (a.id !== b.id) return a.id < b.id ? -1 : 1;
-      return 0;
-    }
-    if (key === "recommendation") {
-      const delta =
-        recommendationRank(a.assessment.recommendation) -
-        recommendationRank(b.assessment.recommendation);
-      if (delta !== 0) return direction * delta;
-      if (a.assessment.score !== b.assessment.score)
-        return direction * (a.assessment.score - b.assessment.score);
-      return a.id < b.id ? -1 : 1;
-    }
-    if (key === "conflict") {
-      const delta =
-        conflictRank(a.assessment.conflictLevel) -
-        conflictRank(b.assessment.conflictLevel);
-      if (delta !== 0) return direction * delta;
-      if (a.assessment.score !== b.assessment.score)
-        return direction * (a.assessment.score - b.assessment.score);
-      return a.id < b.id ? -1 : 1;
-    }
-    // Default: risk score.
-    if (a.assessment.score !== b.assessment.score)
-      return direction * (a.assessment.score - b.assessment.score);
-    if (a.requestedStartDate !== b.requestedStartDate)
-      return direction * (a.requestedStartDate < b.requestedStartDate ? -1 : 1);
-    return a.id < b.id ? -1 : 1;
-  });
-}
-
-function buildSearchParamsHref(
-  pathname: string,
-  params: URLSearchParams,
-): string {
-  const qs = params.toString();
-  return qs ? `${pathname}?${qs}` : pathname;
-}
 
 function formatShortDay(iso: IsoDate): string {
   return new Intl.DateTimeFormat("en-US", {
@@ -110,21 +45,19 @@ export default async function RequestsPage({
   const repo = getDemoRepo();
 
   const sp = await Promise.resolve(searchParams ?? {});
+  const reviewQuery = readReviewFilterQuery(sp);
 
-  const teamIdRaw = asString(sp.teamId);
-  const roleIdRaw = asString(sp.roleId);
-  const requestTypeRaw = asString(sp.requestType);
-  const statusRaw = asString(sp.status);
-  const coverageBandRaw = asString(sp.coverageBand);
-  const conflictLevelRaw = asString(sp.conflictLevel);
-  const demoDecisionRaw = asString(sp.demoDecision);
-  const weekStartRaw = asString(sp.weekStart);
-
-  const startDateRaw = asString(sp.startDate);
-  const endDateRaw = asString(sp.endDate);
-
-  const sortKeyRaw = asString(sp.sort) ?? "risk";
-  const sortDirRaw = (asString(sp.dir) ?? "desc").toLowerCase();
+  const teamIdRaw = reviewQuery.teamId;
+  const roleIdRaw = reviewQuery.roleId;
+  const requestTypeRaw = reviewQuery.requestType;
+  const statusRaw = reviewQuery.status;
+  const coverageBandRaw = reviewQuery.coverageBand;
+  const conflictLevelRaw = reviewQuery.conflictLevel;
+  const weekStartRaw = reviewQuery.weekStart;
+  const startDateRaw = reviewQuery.startDate;
+  const endDateRaw = reviewQuery.endDate;
+  const sortKeyRaw = reviewQuery.sort ?? "risk";
+  const sortDirRaw = (reviewQuery.dir ?? "desc").toLowerCase();
 
   const errors: string[] = [];
 
@@ -163,27 +96,11 @@ export default async function RequestsPage({
   const conflictAllowed = ["none", "low", "medium", "high"] as const;
   const conflictLevel =
     conflictLevelRaw &&
-    conflictAllowed.includes(
-      conflictLevelRaw as QueueItem["assessment"]["conflictLevel"],
-    )
-      ? (conflictLevelRaw as QueueItem["assessment"]["conflictLevel"])
+    conflictAllowed.includes(conflictLevelRaw as (typeof conflictAllowed)[number])
+      ? (conflictLevelRaw as (typeof conflictAllowed)[number])
       : undefined;
   if (conflictLevelRaw && !conflictLevel)
     errors.push("Invalid conflict level filter.");
-
-  const demoDecisionAllowed = [
-    "none",
-    "approve",
-    "defer",
-    "ask_for_coverage",
-  ] as const;
-  const demoDecision =
-    demoDecisionRaw &&
-    demoDecisionAllowed.includes(demoDecisionRaw as DemoDecision)
-      ? (demoDecisionRaw as DemoDecision)
-      : undefined;
-  if (demoDecisionRaw && !demoDecision)
-    errors.push("Invalid demo decision filter.");
 
   let startDate: IsoDate | undefined;
   let endDate: IsoDate | undefined;
@@ -200,24 +117,18 @@ export default async function RequestsPage({
     }
   }
 
-  const sortAllowed = [
-    "risk",
-    "start_date",
-    "recommendation",
-    "conflict",
-  ] as const;
-  const sortKey = sortAllowed.includes(
-    sortKeyRaw as (typeof sortAllowed)[number],
+  const sortKey: (typeof queueSortKeys)[number] = queueSortKeys.includes(
+    sortKeyRaw as (typeof queueSortKeys)[number],
   )
-    ? (sortKeyRaw as (typeof sortAllowed)[number])
+    ? (sortKeyRaw as (typeof queueSortKeys)[number])
     : "risk";
   if (
     sortKeyRaw &&
-    !sortAllowed.includes(sortKeyRaw as (typeof sortAllowed)[number])
+    !queueSortKeys.includes(sortKeyRaw as (typeof queueSortKeys)[number])
   )
     errors.push("Invalid sort key.");
 
-  const sortDir =
+  const sortDir: "asc" | "desc" =
     sortDirRaw === "asc" || sortDirRaw === "desc" ? sortDirRaw : "desc";
   if (sortDirRaw && sortDirRaw !== "asc" && sortDirRaw !== "desc")
     errors.push("Invalid sort direction.");
@@ -239,26 +150,18 @@ export default async function RequestsPage({
     },
   });
 
-  const items = sortItems(queue.items, sortKey, sortDir);
+  const items = sortQueueItems(queue.items, sortKey, sortDir);
 
-  const baseParams = new URLSearchParams();
-  if (teamIdRaw) baseParams.set("teamId", teamIdRaw);
-  if (roleIdRaw) baseParams.set("roleId", roleIdRaw);
-  if (requestTypeRaw) baseParams.set("requestType", requestTypeRaw);
-  if (statusRaw) baseParams.set("status", statusRaw);
-  if (coverageBandRaw) baseParams.set("coverageBand", coverageBandRaw);
-  if (conflictLevelRaw) baseParams.set("conflictLevel", conflictLevelRaw);
-  if (demoDecisionRaw) baseParams.set("demoDecision", demoDecisionRaw);
-  if (heatmapWeekStart) baseParams.set("weekStart", heatmapWeekStart);
-  if (startDateRaw) baseParams.set("startDate", startDateRaw);
-  if (endDateRaw) baseParams.set("endDate", endDateRaw);
-  if (sortKeyRaw) baseParams.set("sort", sortKeyRaw);
-  if (sortDirRaw) baseParams.set("dir", sortDirRaw);
+  const baseQuery: ReviewFilterQuery = {
+    ...reviewQuery,
+    ...(heatmapWeekStart ? { weekStart: heatmapWeekStart } : {}),
+  };
+  const baseParams = writeReviewFilterQuery(baseQuery);
 
   const rows: QueueTableRow[] = items.map((item) => {
     return {
       ...item,
-      detailHref: buildSearchParamsHref(`/requests/${item.id}`, baseParams),
+      detailHref: buildReviewHref(`/requests/${item.id}`, baseQuery),
     };
   });
 
@@ -290,19 +193,11 @@ export default async function RequestsPage({
       label: `Conflicts: ${conflictLevelRaw}`,
       key: "conflictLevel",
     });
-  if (demoDecisionRaw)
-    activeFilters.push({
-      label: `Demo decision: ${demoDecision ? decisionLabel(demoDecision) : demoDecisionRaw}`,
-      key: "demoDecision",
-    });
   if (startDateRaw && endDateRaw)
     activeFilters.push({
       label: `Dates: ${startDateRaw} to ${endDateRaw}`,
       key: "dateRange",
     });
-
-  const clearDemoDecisionParams = new URLSearchParams(baseParams);
-  clearDemoDecisionParams.delete("demoDecision");
 
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-10 sm:py-14">
@@ -348,10 +243,7 @@ export default async function RequestsPage({
           </p>
           <div className="mt-3">
             <Link
-              href={buildSearchParamsHref(
-                "/heatmap",
-                new URLSearchParams([["weekStart", heatmapWeekStart]]),
-              )}
+              href={buildReviewHref("/heatmap", baseQuery)}
               className="text-sm font-medium text-zinc-950 underline underline-offset-4 hover:text-zinc-700 dark:text-zinc-50 dark:hover:text-zinc-200"
             >
               Return to selected heatmap week
@@ -450,32 +342,6 @@ export default async function RequestsPage({
                 <option value="approved">Approved</option>
                 <option value="withdrawn">Withdrawn</option>
               </select>
-            </div>
-
-            <div>
-              <label
-                htmlFor="demoDecision"
-                className="text-xs font-medium text-zinc-600 dark:text-zinc-400"
-              >
-                Demo decision
-              </label>
-              <select
-                id="demoDecision"
-                name="demoDecision"
-                defaultValue={demoDecisionRaw ?? ""}
-                className="mt-1 w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-950 shadow-sm focus:outline-none focus:ring-2 focus:ring-zinc-300 dark:border-zinc-800 dark:bg-zinc-950/40 dark:text-zinc-50 dark:focus:ring-zinc-700"
-              >
-                <option value="">Any browser-session state</option>
-                <option value="none">No simulated decision</option>
-                <option value="approve">Approved in demo</option>
-                <option value="ask_for_coverage">
-                  Ask for coverage in demo
-                </option>
-                <option value="defer">Deferred in demo</option>
-              </select>
-              <p className="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">
-                Browser session only. Refresh clears this simulated state.
-              </p>
             </div>
 
             <div>
@@ -644,7 +510,10 @@ export default async function RequestsPage({
                   return (
                     <Link
                       key={f.label}
-                      href={buildSearchParamsHref("/requests", next)}
+                      href={buildReviewHref(
+                        "/requests",
+                        readReviewFilterQuery(next),
+                      )}
                       className="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950/20 dark:text-zinc-300 dark:hover:bg-zinc-950/30"
                       aria-label={`Remove ${f.label}`}
                     >
@@ -664,12 +533,7 @@ export default async function RequestsPage({
       <section aria-label="Queue results" className="mt-6">
         <QueueResultsPanel
           rows={rows}
-          demoDecisionFilter={demoDecision ?? null}
           clearAllHref="/requests"
-          clearDemoDecisionHref={buildSearchParamsHref(
-            "/requests",
-            clearDemoDecisionParams,
-          )}
         />
       </section>
     </div>

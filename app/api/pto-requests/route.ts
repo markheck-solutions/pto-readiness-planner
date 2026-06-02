@@ -3,7 +3,11 @@ import { NextResponse } from "next/server";
 import { jsonError, methodNotAllowed } from "../../../src/api/safeError";
 import { isIsoDate, type IsoDate } from "../../../src/domain/dates";
 import { getDemoRepo } from "../../../src/repos/demoRepo";
-import { buildQueue } from "../../../src/domain/ptoQueue/queueService";
+import {
+  buildQueue,
+  queueSortKeys,
+  sortQueueItems,
+} from "../../../src/domain/ptoQueue/queueService";
 import type {
   DemoCoverageBand,
   DemoRequestStatus,
@@ -139,6 +143,27 @@ export async function GET(request: Request) {
     endDate = endDateRaw;
   }
 
+  const sortRaw = url.searchParams.get("sort") ?? "risk";
+  const sort: (typeof queueSortKeys)[number] | null = queueSortKeys.includes(
+    sortRaw as (typeof queueSortKeys)[number],
+  )
+    ? (sortRaw as (typeof queueSortKeys)[number])
+    : null;
+  if (url.searchParams.has("sort") && !sort) {
+    return jsonError(400, "invalid_request", "Invalid sort.", {
+      allowed: [...queueSortKeys],
+    });
+  }
+
+  const dirRaw = (url.searchParams.get("dir") ?? "desc").toLowerCase();
+  const dir: "asc" | "desc" | null =
+    dirRaw === "asc" || dirRaw === "desc" ? dirRaw : null;
+  if (url.searchParams.has("dir") && !dir) {
+    return jsonError(400, "invalid_request", "Invalid dir.", {
+      allowed: ["asc", "desc"],
+    });
+  }
+
   const result = buildQueue({
     repo,
     filters: {
@@ -158,13 +183,19 @@ export async function GET(request: Request) {
     },
   });
 
+  const items = sortQueueItems(result.items, sort ?? "risk", dir ?? "desc");
+
   return NextResponse.json(
     {
       demoMode,
       datasetVersion: repo.meta.datasetVersion,
       seedFingerprint: repo.meta.seedFingerprint,
-      meta: result.meta,
-      items: result.items,
+      meta: {
+        ...result.meta,
+        sort: sort ?? "risk",
+        dir: dir ?? "desc",
+      },
+      items,
     },
     { status: 200 },
   );

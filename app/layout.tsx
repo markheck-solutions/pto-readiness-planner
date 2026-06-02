@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
 import "./globals.css";
@@ -30,6 +31,31 @@ function parseBooleanEnv(
   if (value.toLowerCase() === "true") return true;
   if (value.toLowerCase() === "false") return false;
   return fallback;
+}
+
+function HeaderNavFallback() {
+  return (
+    <nav aria-label="Primary" className="flex items-center gap-4 text-sm">
+      <Link
+        href="/requests"
+        className="text-zinc-700 hover:text-zinc-950 dark:text-zinc-300 dark:hover:text-zinc-50"
+      >
+        Requests
+      </Link>
+      <Link
+        href="/heatmap"
+        className="text-zinc-700 hover:text-zinc-950 dark:text-zinc-300 dark:hover:text-zinc-50"
+      >
+        Coverage
+      </Link>
+      <a
+        href="/api/health"
+        className="hidden text-zinc-700 hover:text-zinc-950 dark:text-zinc-300 dark:hover:text-zinc-50 md:inline"
+      >
+        Health
+      </a>
+    </nav>
+  );
 }
 
 export default function RootLayout({
@@ -72,7 +98,9 @@ export default function RootLayout({
                 {demoMode ? "Demo Mode" : "Local mode"}
               </span>
             </div>
-            <HeaderNav />
+            <Suspense fallback={<HeaderNavFallback />}>
+              <HeaderNav />
+            </Suspense>
           </div>
         </header>
 

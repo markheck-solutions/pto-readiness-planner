@@ -45,8 +45,9 @@ export function buildCalendarHeatmap(args: {
   repo: DemoRepo;
   preset: "next-8-weeks" | "next-12-weeks";
   teamId?: string | null;
+  roleId?: string | null;
 }): HeatmapResult {
-  const { repo, preset, teamId } = args;
+  const { repo, preset, teamId, roleId } = args;
 
   const startDate = repo.meta.dateBounds.startDate;
   const spanDays = preset === "next-12-weeks" ? 83 : 55;
@@ -82,7 +83,7 @@ export function buildCalendarHeatmap(args: {
       }
 
       for (const req of repo.coverageRequirements.filter(
-        (c) => c.teamId === team.id,
+        (c) => c.teamId === team.id && (roleId ? c.roleId === roleId : true),
       )) {
         const role = repo.roles.find((r) => r.id === req.roleId);
         const roleName = role?.name ?? req.roleId;

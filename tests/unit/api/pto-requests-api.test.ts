@@ -86,11 +86,40 @@ describe("public PTO APIs", () => {
     expect(combinedItems.every((i) => i.requestType === "training")).toBe(true);
   });
 
+  it("GET /api/pto-requests applies sort and direction from the shared review contract", async () => {
+    const res = await queueGET(
+      makeReq("/api/pto-requests?sort=start_date&dir=asc"),
+    );
+
+    expect(res.status).toBe(200);
+    const json = asRecord((await res.json()) as unknown);
+    const items = asArray(json.items).map(asRecord);
+
+    const startDates = items.map((item) => String(item.requestedStartDate));
+    expect(startDates).toEqual([...startDates].sort());
+
+    const meta = asRecord(json.meta);
+    expect(meta.sort).toBe("start_date");
+    expect(meta.dir).toBe("asc");
+  });
+
   it("GET /api/pto-requests rejects invalid filters with controlled JSON errors", async () => {
     const res = await queueGET(makeReq("/api/pto-requests?status=bogus"));
     expect(res.status).toBe(400);
     const json = (await res.json()) as unknown;
     expect(json).toEqual(
+      expect.objectContaining({
+        error: expect.objectContaining({
+          code: "invalid_request",
+          message: expect.any(String),
+        }),
+      }),
+    );
+
+    const invalidSort = await queueGET(makeReq("/api/pto-requests?sort=bogus"));
+    expect(invalidSort.status).toBe(400);
+    const invalidSortJson = (await invalidSort.json()) as unknown;
+    expect(invalidSortJson).toEqual(
       expect.objectContaining({
         error: expect.objectContaining({
           code: "invalid_request",

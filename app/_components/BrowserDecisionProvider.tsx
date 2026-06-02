@@ -15,9 +15,12 @@ type DecisionMap = Record<string, DemoDecision>;
 
 type BrowserDecisionContextValue = {
   decisions: DecisionMap;
+  decisionFilter: DemoDecision | null;
   getDecision: (requestId: string) => DemoDecision;
   setDecision: (requestId: string, decision: DemoDecision) => void;
   clearDecision: (requestId: string) => void;
+  setDecisionFilter: (decision: DemoDecision | null) => void;
+  clearDecisionFilter: () => void;
 };
 
 const BrowserDecisionContext =
@@ -36,6 +39,9 @@ function useBrowserDecisionContext(): BrowserDecisionContextValue {
 
 export function BrowserDecisionProvider({ children }: { children: ReactNode }) {
   const [decisions, setDecisions] = useState<DecisionMap>({});
+  const [decisionFilter, setDecisionFilter] = useState<DemoDecision | null>(
+    null,
+  );
 
   const setDecision = useCallback(
     (requestId: string, decision: DemoDecision) => {
@@ -53,14 +59,28 @@ export function BrowserDecisionProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const clearDecisionFilter = useCallback(() => {
+    setDecisionFilter(null);
+  }, []);
+
   const value = useMemo<BrowserDecisionContextValue>(
     () => ({
       decisions,
+      decisionFilter,
       getDecision: (requestId: string) => decisions[requestId] ?? "none",
       setDecision,
       clearDecision,
+      setDecisionFilter,
+      clearDecisionFilter,
     }),
-    [clearDecision, decisions, setDecision],
+    [
+      clearDecision,
+      clearDecisionFilter,
+      decisionFilter,
+      decisions,
+      setDecision,
+      setDecisionFilter,
+    ],
   );
 
   return (
@@ -78,6 +98,9 @@ export function useBrowserDecision(requestId: string) {
     decision,
     setDecision: context.setDecision,
     clearDecision: context.clearDecision,
+    decisionFilter: context.decisionFilter,
+    setDecisionFilter: context.setDecisionFilter,
+    clearDecisionFilter: context.clearDecisionFilter,
   };
 }
 

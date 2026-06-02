@@ -40,6 +40,21 @@ export type QueueItem = {
   };
 };
 
+export type QueueSortKey =
+  | "risk"
+  | "start_date"
+  | "recommendation"
+  | "conflict"
+
+export type QueueSortDir = "asc" | "desc"
+
+export const queueSortKeys = [
+  "risk",
+  "start_date",
+  "recommendation",
+  "conflict",
+] as const
+
 function overlaps(
   a: { start: IsoDate; end: IsoDate },
   b: { start: IsoDate; end: IsoDate },
@@ -55,6 +70,73 @@ function filterByDateRange(
     { start: req.requestedStartDate, end: req.requestedEndDate },
     range,
   );
+}
+
+function conflictRank(level: QueueItem["assessment"]["conflictLevel"]): number {
+  if (level === "high") return 3
+  if (level === "medium") return 2
+  if (level === "low") return 1
+  return 0
+}
+
+function recommendationRank(
+  rec: QueueItem["assessment"]["recommendation"],
+): number {
+  if (rec === "defer") return 3
+  if (rec === "needs_discussion") return 2
+  if (rec === "approve_with_coverage_actions") return 1
+  return 0
+}
+
+export function sortQueueItems(
+  items: QueueItem[],
+  key: QueueSortKey,
+  dir: QueueSortDir,
+): QueueItem[] {
+  const direction = dir === "asc" ? 1 : -1
+  return items.slice().sort((a, b) => {
+    if (key === "start_date") {
+      if (a.requestedStartDate !== b.requestedStartDate) {
+        return (
+          direction * (a.requestedStartDate < b.requestedStartDate ? -1 : 1)
+        )
+      }
+      if (a.id !== b.id) return a.id < b.id ? -1 : 1
+      return 0
+    }
+
+    if (key === "recommendation") {
+      const delta =
+        recommendationRank(a.assessment.recommendation) -
+        recommendationRank(b.assessment.recommendation)
+      if (delta !== 0) return direction * delta
+      if (a.assessment.score !== b.assessment.score) {
+        return direction * (a.assessment.score - b.assessment.score)
+      }
+      return a.id < b.id ? -1 : 1
+    }
+
+    if (key === "conflict") {
+      const delta =
+        conflictRank(a.assessment.conflictLevel) -
+        conflictRank(b.assessment.conflictLevel)
+      if (delta !== 0) return direction * delta
+      if (a.assessment.score !== b.assessment.score) {
+        return direction * (a.assessment.score - b.assessment.score)
+      }
+      return a.id < b.id ? -1 : 1
+    }
+
+    if (a.assessment.score !== b.assessment.score) {
+      return direction * (a.assessment.score - b.assessment.score)
+    }
+    if (a.requestedStartDate !== b.requestedStartDate) {
+      return (
+        direction * (a.requestedStartDate < b.requestedStartDate ? -1 : 1)
+      )
+    }
+    return a.id < b.id ? -1 : 1
+  })
 }
 
 export function buildQueue(args: { repo: DemoRepo; filters: QueueFilters }) {

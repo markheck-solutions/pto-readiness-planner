@@ -13,6 +13,12 @@ import {
 } from "../../../src/domain/dates";
 import { createAssessmentForRequest } from "../../../src/domain/assessment/createRequestAssessment";
 import {
+  buildReviewHref,
+  readReviewFilterQuery,
+  withWeekStartFromDateRange,
+  type ReviewFilterQuery,
+} from "../../../src/domain/reviewFilters";
+import {
   findEmployeeById,
   findPtoRequestById,
   findRoleById,
@@ -73,46 +79,15 @@ function getDetailPreviewState(
   return null;
 }
 
-function buildSearchParamsHref(
-  pathname: string,
-  params: URLSearchParams,
-): string {
-  const qs = params.toString();
-  return qs ? `${pathname}?${qs}` : pathname;
+function buildQueueHref(query: ReviewFilterQuery): string {
+  return buildReviewHref("/requests", query);
 }
 
-function buildQueueHref(searchParams: SearchParams): string {
-  const keys = [
-    "teamId",
-    "roleId",
-    "requestType",
-    "status",
-    "demoDecision",
-    "coverageBand",
-    "conflictLevel",
-    "weekStart",
-    "startDate",
-    "endDate",
-    "sort",
-    "dir",
-  ] as const;
-  const params = new URLSearchParams();
-
-  for (const key of keys) {
-    const value = asString(searchParams[key]);
-    if (value) params.set(key, value);
-  }
-
-  return buildSearchParamsHref("/requests", params);
-}
-
-function buildHeatmapHref(searchParams: SearchParams): string | null {
-  const weekStart = asString(searchParams.weekStart);
+function buildHeatmapHref(query: ReviewFilterQuery): string | null {
+  const weekQuery = withWeekStartFromDateRange(query);
+  const weekStart = weekQuery.weekStart;
   if (!weekStart || !isIsoDate(weekStart)) return null;
-
-  const params = new URLSearchParams();
-  params.set("weekStart", weekStart);
-  return buildSearchParamsHref("/heatmap", params);
+  return buildReviewHref("/heatmap", weekQuery);
 }
 
 function formatShortDay(iso: IsoDate): string {
@@ -213,11 +188,12 @@ export default async function RequestDetailPage({
 }) {
   const { requestId } = await Promise.resolve(params);
   const sp = await Promise.resolve(searchParams ?? {});
+  const reviewQuery = readReviewFilterQuery(sp);
   const previewState = getDetailPreviewState(asString(sp.state));
-  const queueHref = buildQueueHref(sp);
-  const heatmapHref = buildHeatmapHref(sp);
-  const weekStart = asString(sp.weekStart);
-  const weekEnd = asString(sp.endDate);
+  const queueHref = buildQueueHref(reviewQuery);
+  const heatmapHref = buildHeatmapHref(reviewQuery);
+  const weekStart = reviewQuery.weekStart;
+  const weekEnd = reviewQuery.endDate;
   const hasHeatmapContext =
     heatmapHref !== null &&
     weekStart !== undefined &&

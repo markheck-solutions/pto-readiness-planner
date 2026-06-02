@@ -9,9 +9,24 @@ export function SimulatedDecisionControls({
 }: {
   requestId: string;
 }) {
-  const { decision, setDecision, clearDecision } =
-    useBrowserDecision(requestId);
+  const {
+    decision,
+    setDecision,
+    clearDecision,
+    decisionFilter,
+    setDecisionFilter,
+  } = useBrowserDecision(requestId);
   const bannerLabel = decisionActionLabel(decision);
+
+  const applyDecision = (nextDecision: "approve" | "ask_for_coverage" | "defer") => {
+    setDecision(requestId, nextDecision)
+    if (decisionFilter !== null) setDecisionFilter(nextDecision)
+  }
+
+  const resetDecision = () => {
+    clearDecision(requestId)
+    if (decisionFilter !== null) setDecisionFilter("none")
+  }
 
   return (
     <section aria-label="Simulated decision controls">
@@ -31,7 +46,7 @@ export function SimulatedDecisionControls({
       <div className="flex flex-wrap gap-3">
         <button
           type="button"
-          onClick={() => setDecision(requestId, "approve")}
+          onClick={() => applyDecision("approve")}
           aria-pressed={decision === "approve"}
           className="inline-flex items-center justify-center rounded-full bg-zinc-950 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
         >
@@ -39,7 +54,7 @@ export function SimulatedDecisionControls({
         </button>
         <button
           type="button"
-          onClick={() => setDecision(requestId, "ask_for_coverage")}
+          onClick={() => applyDecision("ask_for_coverage")}
           aria-pressed={decision === "ask_for_coverage"}
           className="inline-flex items-center justify-center rounded-full border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-950 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-50 dark:hover:bg-zinc-900"
         >
@@ -47,7 +62,7 @@ export function SimulatedDecisionControls({
         </button>
         <button
           type="button"
-          onClick={() => setDecision(requestId, "defer")}
+          onClick={() => applyDecision("defer")}
           aria-pressed={decision === "defer"}
           className="inline-flex items-center justify-center rounded-full border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-950 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-50 dark:hover:bg-zinc-900"
         >
@@ -55,7 +70,7 @@ export function SimulatedDecisionControls({
         </button>
         <button
           type="button"
-          onClick={() => clearDecision(requestId)}
+          onClick={resetDecision}
           className="ml-auto inline-flex items-center justify-center rounded-full px-3 py-2 text-sm text-zinc-600 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-zinc-50"
         >
           Reset demo state
