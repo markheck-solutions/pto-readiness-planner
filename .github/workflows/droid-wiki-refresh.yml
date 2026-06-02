@@ -15,6 +15,7 @@ jobs:
     timeout-minutes: 35
     env:
       FACTORY_API_KEY: ${{ secrets.FACTORY_API_KEY }}
+      FACTORY_DROID_VERSION: "0.138.0"
       NEXT_PUBLIC_DEMO_MODE: "true"
       AI_PROVIDER: mock
       NEXT_TELEMETRY_DISABLED: "1"
@@ -43,11 +44,9 @@ jobs:
         if: steps.factory.outputs.skip == 'false'
         run: npm ci
 
-      - name: Install Factory Droid
+      - name: Verify pinned Factory Droid CLI
         if: steps.factory.outputs.skip == 'false'
-        run: |
-          curl -fsSL https://app.factory.ai/cli | sh
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+        run: npm exec --yes --package=@factory/cli@${FACTORY_DROID_VERSION} -- droid --version
 
       - name: Generate wiki
         if: steps.factory.outputs.skip == 'false'
@@ -55,7 +54,7 @@ jobs:
         continue-on-error: true
         run: |
           set -o pipefail
-          droid exec --cwd "$GITHUB_WORKSPACE" --auto high "/wiki" 2>&1 | tee droid-wiki-output.log
+          npm exec --yes --package=@factory/cli@${FACTORY_DROID_VERSION} -- droid exec --cwd "$GITHUB_WORKSPACE" --auto high "/wiki" 2>&1 | tee droid-wiki-output.log
 
       - name: Report wiki refresh failure
         if: steps.factory.outputs.skip == 'false' && steps.generate-wiki.outcome == 'failure'

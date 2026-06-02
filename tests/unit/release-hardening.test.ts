@@ -39,6 +39,21 @@ describe("release hardening scaffold", () => {
     expect(playwrightConfig).toContain("useLocalWebServer");
   });
 
+  it("uses a pinned auditable Factory Droid install path for wiki refresh", () => {
+    const workflow = readText(".github/workflows/droid-wiki-refresh.yml");
+
+    expect(workflow).toContain('FACTORY_DROID_VERSION: "0.138.0"');
+    expect(workflow).toContain(
+      "npm exec --yes --package=@factory/cli@${FACTORY_DROID_VERSION} -- droid --version",
+    );
+    expect(workflow).toContain(
+      'npm exec --yes --package=@factory/cli@${FACTORY_DROID_VERSION} -- droid exec --cwd "$GITHUB_WORKSPACE" --auto high "/wiki"',
+    );
+    expect(workflow).not.toContain(
+      "curl -fsSL https://app.factory.ai/cli | sh",
+    );
+  });
+
   it("expands safety and readiness scripts for hardening automation", () => {
     const readinessReport = readText("scripts/readiness-report.ts");
     expect(readinessReport).toContain(".github/workflows/qa.yml");
@@ -46,6 +61,9 @@ describe("release hardening scaffold", () => {
       ".github/workflows/droid-wiki-refresh.yml",
     );
     expect(readinessReport).toContain("Readiness level:");
+    expect(readinessReport).toContain(
+      "No remote pipe-to-shell installer pattern detected",
+    );
 
     const safetyScan = readText("scripts/demo-safety-scan.ts");
     expect(safetyScan).toContain(".next");

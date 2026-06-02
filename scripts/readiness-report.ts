@@ -2,7 +2,12 @@ import fs from "node:fs";
 import path from "node:path";
 import { execSync } from "node:child_process";
 
-type SectionStatus = "PASS" | "WARN" | "FAIL";
+import {
+  buildAuditSection,
+  normalizeExecOutput,
+  type SafeRunResult,
+  type SectionStatus,
+} from "./readiness-report-lib";
 
 type Section = {
   title: string;
@@ -32,10 +37,33 @@ function run(cmd: string) {
 
 function safeRun(cmd: string) {
   try {
-    return { ok: true as const, stdout: run(cmd) };
+    return {
+      ok: true as const,
+      stdout: run(cmd),
+      stderr: "",
+      exitCode: 0,
+    } satisfies SafeRunResult;
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "command failed";
-    return { ok: false as const, stdout: "", error: msg };
+    const failure = err as Partial<Error> & {
+      stdout?: Buffer | string;
+      stderr?: Buffer | string;
+      status?: number | null;
+    };
+
+    const stdout = normalizeExecOutput(failure.stdout);
+    const stderr = normalizeExecOutput(failure.stderr);
+    const exitCode =
+      typeof failure.status === "number" ? failure.status : undefined;
+
+    return {
+      ok: false as const,
+      stdout,
+      stderr,
+      exitCode,
+      error:
+        typeof exitCode === "number" ? `exit code ${exitCode}: ${msg}` : msg,
+    } satisfies SafeRunResult;
   }
 }
 
@@ -107,6 +135,80 @@ function checkWorkflowMarkers(
       `- ${filePath} is missing expected markers:`,
       ...missing.map((marker) => `  - ${marker}`),
     ],
+  };
+}
+
+function checkWikiWorkflowGate(): {
+  status: SectionStatus;
+  lines: string[];
+} {
+  const filePath = ".github/workflows/droid-wiki-refresh.yml";
+  if (!exists(filePath)) {
+    return {
+      status: "FAIL",
+      lines: [`- Missing required workflow: ${filePath}`],
+    };
+  }
+
+  const text = readText(filePath);
+  const requiredSubstrings = [
+    "workflow_dispatch",
+    "master",
+    "contents: read",
+    "FACTORY_API_KEY",
+    "npm ci",
+    "/wiki",
+  ];
+  const missing = requiredSubstrings.filter((marker) => !text.includes(marker));
+  const riskyPatterns = [
+    "curl -fsSL https://app.factory.ai/cli | sh",
+    "wget -qO- https://app.factory.ai/cli | sh",
+  ].filter((pattern) => text.includes(pattern));
+  const hasAuditableInstallPath =
+    text.includes("@factory/cli@") ||
+    /Factory-AI\/droid-action@[0-9a-f]{7,40}/i.test(text) ||
+    text.includes("scripts/install-factory-droid") ||
+    text.includes(".github/vendor/factory-droid");
+
+  if (
+    missing.length === 0 &&
+    riskyPatterns.length === 0 &&
+    hasAuditableInstallPath
+  ) {
+    return {
+      status: "PASS",
+      lines: [
+        `- ${filePath} includes expected workflow markers`,
+        "- Auditable Factory Droid install path detected",
+        "- No remote pipe-to-shell installer pattern detected",
+      ],
+    };
+  }
+
+  const lines = [];
+
+  if (missing.length > 0) {
+    lines.push(`- ${filePath} is missing expected markers:`);
+    lines.push(...missing.map((marker) => `  - ${marker}`));
+  }
+
+  if (riskyPatterns.length > 0) {
+    if (lines.length > 0) lines.push("");
+    lines.push("- Unsafe remote installer patterns detected:");
+    lines.push(...riskyPatterns.map((pattern) => `  - ${pattern}`));
+  }
+
+  if (!hasAuditableInstallPath) {
+    if (lines.length > 0) lines.push("");
+    lines.push("- No pinned or vendored Factory Droid install path detected.");
+    lines.push(
+      "  - Expected a pinned npm package, pinned GitHub Action ref, or vendored installer path.",
+    );
+  }
+
+  return {
+    status: "FAIL",
+    lines,
   };
 }
 
@@ -229,36 +331,6 @@ function workflowBranchAssumptionChecks(): {
       `  - If the remote default branch is still '${DEFAULT_BRANCH}', restore branch filters.`,
       "  - If the remote default branch changed, update workflow branch filters and update this readiness report's DEFAULT_BRANCH constant.",
     ],
-  };
-}
-
-function parseAuditCounts(jsonText: string): {
-  total: number;
-  critical: number;
-  high: number;
-  moderate: number;
-  low: number;
-} {
-  type AuditJson = {
-    metadata?: {
-      vulnerabilities?: Partial<{
-        total: number;
-        critical: number;
-        high: number;
-        moderate: number;
-        low: number;
-      }>;
-    };
-  };
-
-  const parsed = JSON.parse(jsonText) as AuditJson;
-  const v = parsed.metadata?.vulnerabilities;
-  return {
-    total: Number(v?.total ?? 0),
-    critical: Number(v?.critical ?? 0),
-    high: Number(v?.high ?? 0),
-    moderate: Number(v?.moderate ?? 0),
-    low: Number(v?.low ?? 0),
   };
 }
 
@@ -403,17 +475,7 @@ async function main() {
   ]);
   sections.push(section("CodeQL workflow", codeql.status, codeql.lines));
 
-  const wikiWorkflow = checkWorkflowMarkers(
-    ".github/workflows/droid-wiki-refresh.yml",
-    [
-      "workflow_dispatch",
-      "master",
-      "contents: read",
-      "FACTORY_API_KEY",
-      "npm ci",
-      "/wiki",
-    ],
-  );
+  const wikiWorkflow = checkWikiWorkflowGate();
   sections.push(
     section("Wiki refresh workflow", wikiWorkflow.status, wikiWorkflow.lines),
   );
@@ -542,48 +604,14 @@ async function main() {
 
   // npm audit triage
   const audit = safeRun("npm audit --json");
-  if (!audit.ok) {
-    sections.push(
-      section("Dependency audit (npm audit)", "WARN", [
-        "- npm audit failed to produce JSON output.",
-        `- Error: ${audit.error}`,
-        "- Action: run `npm audit` locally to view the report.",
-      ]),
-    );
-  } else {
-    const counts = parseAuditCounts(audit.stdout);
-    const status: SectionStatus =
-      counts.critical > 0 || counts.high > 0
-        ? "FAIL"
-        : counts.total > 0
-          ? "WARN"
-          : "PASS";
-
-    const lines = [
-      "- Vulnerability counts:",
-      `  - critical: ${counts.critical}`,
-      `  - high: ${counts.high}`,
-      `  - moderate: ${counts.moderate}`,
-      `  - low: ${counts.low}`,
-      `  - total: ${counts.total}`,
-    ];
-
-    if (status !== "PASS") {
-      lines.push("");
-      lines.push("- Follow-up:");
-      if (counts.critical > 0 || counts.high > 0) {
-        lines.push(
-          "  - Remediate critical or high vulnerabilities or gate releases until resolved.",
-        );
-      } else {
-        lines.push(
-          "  - Review moderate or low findings and plan upgrades where feasible.",
-        );
-      }
-    }
-
-    sections.push(section("Dependency audit (npm audit)", status, lines));
-  }
+  const auditSection = buildAuditSection(audit);
+  sections.push(
+    section(
+      "Dependency audit (npm audit)",
+      auditSection.status,
+      auditSection.lines,
+    ),
+  );
 
   for (const s of sections) printSection(s);
 
