@@ -1,11 +1,8 @@
 import Link from "next/link";
 
 import { DemoNotice } from "../../_components/DemoNotice";
-import { SimulatedDecisionControls } from "../../_components/SimulatedDecisionControls";
 
-import { RecommendationBadge, RiskBadge } from "../../_components/StatusBadges";
-
-import { parseIsoDate, type IsoDate } from "../../../src/domain/dates";
+import type { IsoDate } from "../../../src/domain/dates";
 import { createAssessmentForRequest } from "../../../src/domain/assessment/createRequestAssessment";
 import {
   findEmployeeById,
@@ -14,18 +11,41 @@ import {
   findTeamById,
   getDemoRepo,
 } from "../../../src/repos/demoRepo";
+import { RequestDetailClient } from "../_components/RequestDetailClient";
 
-function formatShortDay(iso: IsoDate): string {
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    timeZone: "UTC",
-  }).format(parseIsoDate(iso));
+function overlaps(
+  a: { start: IsoDate; end: IsoDate },
+  b: { start: IsoDate; end: IsoDate },
+): boolean {
+  return !(a.end < b.start || b.end < a.start);
 }
 
-function formatDateRange(start: IsoDate, end: IsoDate): string {
-  if (start === end) return formatShortDay(start);
-  return `${formatShortDay(start)} to ${formatShortDay(end)}`;
+function employeeAvailableForRange(
+  repo: ReturnType<typeof getDemoRepo>,
+  employeeId: string,
+  range: { start: IsoDate; end: IsoDate },
+): boolean {
+  for (const absence of repo.existingAbsences) {
+    if (absence.employeeId !== employeeId) continue;
+    if (overlaps(range, { start: absence.startDate, end: absence.endDate })) {
+      return false;
+    }
+  }
+
+  for (const request of repo.ptoRequests) {
+    if (request.employeeId !== employeeId) continue;
+    if (request.status === "withdrawn") continue;
+    if (
+      overlaps(range, {
+        start: request.requestedStartDate,
+        end: request.requestedEndDate,
+      })
+    ) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 export default async function RequestDetailPage({
@@ -51,6 +71,33 @@ export default async function RequestDetailPage({
         })
       : null;
 
+  const backupOptions =
+    req && employee && team && role
+      ? repo.employees
+          .filter((candidate) => candidate.teamId === team.id)
+          .filter((candidate) => candidate.roleId === role.id)
+          .filter((candidate) => candidate.id !== employee.id)
+          .map((candidate) => {
+            const available = employeeAvailableForRange(repo, candidate.id, {
+              start: req.requestedStartDate,
+              end: req.requestedEndDate,
+            });
+
+            return {
+              id: candidate.id,
+              displayName: candidate.displayName,
+              available,
+              note: available
+                ? "Available for the selected window."
+                : "Already booked or absent during part of the selected window.",
+            };
+          })
+          .sort((a, b) => {
+            if (a.available !== b.available) return a.available ? -1 : 1;
+            return a.displayName < b.displayName ? -1 : 1;
+          })
+      : [];
+
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-10 sm:py-14">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -75,127 +122,15 @@ export default async function RequestDetailPage({
       </div>
 
       {req && employee && team && role && assessment ? (
-        <>
-          <section
-            aria-label="Request summary"
-            className="mt-8 grid gap-4 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/40 sm:grid-cols-2"
-          >
-            <div>
-              <div className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
-                Employee
-              </div>
-              <div className="mt-1 text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-                {employee.displayName}
-              </div>
-            </div>
-            <div>
-              <div className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
-                Dates
-              </div>
-              <div className="mt-1 text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-                {formatDateRange(req.requestedStartDate, req.requestedEndDate)}
-              </div>
-            </div>
-            <div>
-              <div className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
-                Team
-              </div>
-              <div className="mt-1 text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-                {team.name}
-              </div>
-            </div>
-            <div>
-              <div className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
-                Role
-              </div>
-              <div className="mt-1 text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-                {role.name}
-              </div>
-            </div>
-            <div className="sm:col-span-2">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <div className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
-                    Request type
-                  </div>
-                  <div className="mt-1 text-sm text-zinc-700 dark:text-zinc-300">
-                    {req.requestType.toUpperCase()} · Status: {req.status}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
-                    Submitted
-                  </div>
-                  <div className="mt-1 text-sm text-zinc-700 dark:text-zinc-300">
-                    {new Intl.DateTimeFormat("en-US", {
-                      month: "short",
-                      day: "numeric",
-                      year: "numeric",
-                      timeZone: "UTC",
-                    }).format(new Date(req.submittedAt))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <section aria-label="Coverage readiness snapshot" className="mt-10">
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <div>
-                <h2 className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-                  Coverage readiness snapshot
-                </h2>
-                <p className="mt-1 text-sm leading-6 text-zinc-700 dark:text-zinc-300">
-                  Deterministic demo assessment. You can trace the recommendation back to seeded facts.
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <RiskBadge band={assessment.band} score={assessment.score} />
-                <RecommendationBadge recommendation={assessment.recommendation} />
-              </div>
-            </div>
-
-            <div className="mt-4 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/40">
-              <div className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
-                Top reasons
-              </div>
-              <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-zinc-700 dark:text-zinc-300">
-                {assessment.reasons.slice(0, 3).map((r) => (
-                  <li key={r.code}>
-                    <span className="font-medium text-zinc-950 dark:text-zinc-50">
-                      {r.summary}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-              <div className="mt-4 text-sm text-zinc-700 dark:text-zinc-300">
-                <span className="font-medium text-zinc-950 dark:text-zinc-50">
-                  Manager context:
-                </span>{" "}
-                {req.managerContext}
-              </div>
-              <div className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">
-                <span className="font-medium text-zinc-950 dark:text-zinc-50">
-                  Employee note:
-                </span>{" "}
-                {req.employeeNote}
-              </div>
-            </div>
-          </section>
-
-          <section aria-label="Demo actions" className="mt-10 max-w-3xl">
-            <h2 className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-              Manager actions (demo only)
-            </h2>
-            <p className="mt-3 text-sm leading-6 text-zinc-700 dark:text-zinc-300">
-              These controls do not save anything. They are browser-only
-              simulation and reset on refresh.
-            </p>
-            <div className="mt-4">
-              <SimulatedDecisionControls />
-            </div>
-          </section>
-        </>
+        <RequestDetailClient
+          key={req.id}
+          request={req}
+          employee={employee}
+          team={team}
+          role={role}
+          assessment={assessment}
+          backupOptions={backupOptions}
+        />
       ) : (
         <section
           aria-label="Missing request"

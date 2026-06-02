@@ -1,13 +1,12 @@
 import Link from "next/link";
 
 import { DemoNotice } from "../_components/DemoNotice";
-import { RecommendationBadge, RiskBadge } from "../_components/StatusBadges";
+import { QueueResultsTable, type QueueTableRow } from "./QueueResultsTable";
 
-import { isIsoDate, parseIsoDate, type IsoDate } from "../../src/domain/dates";
+import { isIsoDate, type IsoDate } from "../../src/domain/dates";
 import { buildQueue, type QueueItem } from "../../src/domain/ptoQueue/queueService";
 import type {
   DemoCoverageBand,
-  DemoRecommendation,
   DemoRequestStatus,
   DemoRequestType,
 } from "../../src/demo/dataset";
@@ -24,19 +23,6 @@ function asString(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
 
-function formatShortDay(iso: IsoDate): string {
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    timeZone: "UTC",
-  }).format(parseIsoDate(iso));
-}
-
-function formatDateRange(start: IsoDate, end: IsoDate): string {
-  if (start === end) return formatShortDay(start);
-  return `${formatShortDay(start)} to ${formatShortDay(end)}`;
-}
-
 function conflictRank(level: QueueItem["assessment"]["conflictLevel"]): number {
   if (level === "high") return 3;
   if (level === "medium") return 2;
@@ -44,7 +30,7 @@ function conflictRank(level: QueueItem["assessment"]["conflictLevel"]): number {
   return 0;
 }
 
-function recommendationRank(rec: DemoRecommendation): number {
+function recommendationRank(rec: QueueItem["assessment"]["recommendation"]): number {
   if (rec === "defer") return 3;
   if (rec === "needs_discussion") return 2;
   if (rec === "approve_with_coverage_actions") return 1;
@@ -69,8 +55,8 @@ function sortItems(
     }
     if (key === "recommendation") {
       const delta =
-        recommendationRank(a.assessment.recommendation as DemoRecommendation) -
-        recommendationRank(b.assessment.recommendation as DemoRecommendation);
+        recommendationRank(a.assessment.recommendation) -
+        recommendationRank(b.assessment.recommendation);
       if (delta !== 0) return direction * delta;
       if (a.assessment.score !== b.assessment.score)
         return direction * (a.assessment.score - b.assessment.score);
@@ -218,6 +204,16 @@ export default async function RequestsPage({
   if (endDateRaw) baseParams.set("endDate", endDateRaw);
   if (sortKeyRaw) baseParams.set("sort", sortKeyRaw);
   if (sortDirRaw) baseParams.set("dir", sortDirRaw);
+
+  const rows: QueueTableRow[] = items.map((item) => {
+    const detailParams = new URLSearchParams(baseParams);
+    detailParams.delete("sort");
+    detailParams.delete("dir");
+    return {
+      ...item,
+      detailHref: buildSearchParamsHref(`/requests/${item.id}`, detailParams),
+    };
+  });
 
   const activeFilters: Array<{ label: string; key: string }> = [];
   if (teamIdRaw) activeFilters.push({ label: `Team: ${team?.name ?? teamIdRaw}`, key: "teamId" });
@@ -529,7 +525,7 @@ export default async function RequestsPage({
       </section>
 
       <section aria-label="Queue results" className="mt-6">
-        {items.length === 0 ? (
+        {rows.length === 0 ? (
           <div className="rounded-xl border border-zinc-200 bg-white p-6 text-sm text-zinc-700 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-300">
             <p className="font-medium text-zinc-950 dark:text-zinc-50">
               No requests match the current filters.
@@ -547,82 +543,7 @@ export default async function RequestsPage({
             </div>
           </div>
         ) : (
-          <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900/40">
-            <table className="w-full border-collapse text-left text-sm">
-              <thead className="bg-zinc-50 text-xs text-zinc-600 dark:bg-zinc-950/40 dark:text-zinc-400">
-                <tr>
-                  <th className="px-4 py-3 font-medium">Request</th>
-                  <th className="px-4 py-3 font-medium">Dates</th>
-                  <th className="px-4 py-3 font-medium">Team</th>
-                  <th className="px-4 py-3 font-medium">Role</th>
-                  <th className="px-4 py-3 font-medium">Risk</th>
-                  <th className="px-4 py-3 font-medium">Recommendation</th>
-                  <th className="px-4 py-3 font-medium">Top reason</th>
-                  <th className="px-4 py-3 font-medium">Demo status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                {items.map((r) => {
-                  const detailHref = new URLSearchParams(baseParams);
-                  detailHref.delete("sort");
-                  detailHref.delete("dir");
-                  const link = buildSearchParamsHref(`/requests/${r.id}`, detailHref);
-
-                  return (
-                    <tr key={r.id} className="align-top">
-                      <td className="px-4 py-4">
-                        <div className="font-medium text-zinc-950 dark:text-zinc-50">
-                          <Link
-                            href={link}
-                            className="underline underline-offset-4 hover:text-zinc-700 dark:hover:text-zinc-200"
-                          >
-                            {r.employee.displayName}{" "}
-                            <span className="text-zinc-500 dark:text-zinc-400">
-                              ({r.id})
-                            </span>
-                          </Link>
-                        </div>
-                        <div className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
-                          Type: {r.requestType.toUpperCase()} · Status: {r.status}
-                        </div>
-                      </td>
-                      <td className="px-4 py-4 text-zinc-700 dark:text-zinc-300">
-                        {formatDateRange(r.requestedStartDate, r.requestedEndDate)}
-                      </td>
-                      <td className="px-4 py-4 text-zinc-700 dark:text-zinc-300">
-                        {r.team.name}
-                      </td>
-                      <td className="px-4 py-4 text-zinc-700 dark:text-zinc-300">
-                        {r.role.name}
-                      </td>
-                      <td className="px-4 py-4">
-                        <RiskBadge band={r.assessment.band} score={r.assessment.score} />
-                      </td>
-                      <td className="px-4 py-4">
-                        <RecommendationBadge
-                          recommendation={r.assessment.recommendation as DemoRecommendation}
-                        />
-                      </td>
-                      <td className="px-4 py-4 text-zinc-700 dark:text-zinc-300">
-                        {r.assessment.topReason.summary}
-                        <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                          Conflicts: {r.assessment.conflictLevel}
-                        </div>
-                      </td>
-                      <td className="px-4 py-4 text-zinc-700 dark:text-zinc-300">
-                        <div className="text-xs text-zinc-600 dark:text-zinc-400">
-                          Simulated decision
-                        </div>
-                        <div className="mt-1 text-sm font-medium text-zinc-950 dark:text-zinc-50">
-                          None (demo)
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <QueueResultsTable items={rows} />
         )}
       </section>
     </div>

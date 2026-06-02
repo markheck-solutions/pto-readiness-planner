@@ -80,6 +80,7 @@ export function buildEvidenceBundle(args: {
 
   for (const reason of reasons) {
     if (
+      reason.code === "coverage_above_requirement" ||
       reason.code === "coverage_below_requirement" ||
       reason.code === "coverage_exact_requirement"
     ) {
@@ -88,7 +89,10 @@ export function buildEvidenceBundle(args: {
         requestId,
         sourceType: "coverage_requirement",
         title: `${teamName}: ${roleName} coverage requirement`,
-        explanation: `Minimum required is ${coverage.required}. With this request included, available coverage falls as low as ${coverage.minAvailable} during the selected dates.`,
+        explanation:
+          reason.code === "coverage_above_requirement"
+            ? `Minimum required is ${coverage.required}. Coverage stays above the minimum with available coverage as low as ${coverage.minAvailable} during the selected dates.`
+            : `Minimum required is ${coverage.required}. With this request included, available coverage falls as low as ${coverage.minAvailable} during the selected dates.`,
         dateRange: { start: coverage.range.start, end: coverage.range.end },
         teamId,
         roleId,

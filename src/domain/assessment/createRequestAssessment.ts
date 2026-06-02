@@ -4,6 +4,7 @@ import type {
   DemoPtoRequest,
 } from "../../demo/dataset";
 import type { DemoRepo } from "../../repos/demoRepo";
+import type { CoverageComparison } from "../coverage/coverageCalculator";
 import { calculateCoverageAssessment } from "../coverage/coverageCalculator";
 import { detectConflictsForRequest } from "../conflicts/conflictDetector";
 import { buildEvidenceBundle } from "../evidence/evidenceBuilder";
@@ -28,7 +29,7 @@ export type PtoRequestAssessment = {
     range: { start: string; end: string };
     required: number;
     minAvailable: number;
-    comparison: string;
+    comparison: CoverageComparison;
     singlePersonExposure: boolean;
   };
   conflicts: ReturnType<typeof detectConflictsForRequest>;

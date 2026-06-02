@@ -5,6 +5,7 @@ import type { FairnessAssessment } from "../fairness/fairnessAnalyzer";
 
 export type RiskReason = {
   code:
+    | "coverage_above_requirement"
     | "coverage_below_requirement"
     | "coverage_exact_requirement"
     | "single_person_role_exposure"
@@ -82,6 +83,10 @@ export function scoreRisk(args: {
     });
   } else {
     breakdown.coverage = 5;
+    reasons.push({
+      code: "coverage_above_requirement",
+      summary: `Coverage stays above the role minimum (required ${coverage.required}, available as low as ${coverage.minAvailable}).`,
+    });
   }
 
   if (coverage.singlePersonExposure) {

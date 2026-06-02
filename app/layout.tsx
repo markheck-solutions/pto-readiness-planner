@@ -3,6 +3,8 @@ import { Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
 import "./globals.css";
 
+import { BrowserDecisionProvider } from "./_components/BrowserDecisionProvider";
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -94,7 +96,7 @@ export default function RootLayout({
         </header>
 
         <main id="main" className="flex-1">
-          {children}
+          <BrowserDecisionProvider>{children}</BrowserDecisionProvider>
         </main>
 
         <footer className="border-t border-zinc-200/70 dark:border-zinc-800">
