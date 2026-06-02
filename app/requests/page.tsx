@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { DemoNotice } from "../_components/DemoNotice";
 import { QueueResultsPanel } from "./QueueResultsPanel";
+import { ResetQueueFiltersLink } from "./ResetQueueFiltersLink";
 import { type QueueTableRow } from "./QueueResultsTable";
 
 import { isIsoDate, parseIsoDate, type IsoDate } from "../../src/domain/dates";
@@ -199,6 +200,20 @@ export default async function RequestsPage({
       key: "dateRange",
     });
 
+  const queueControlsKey = [
+    teamIdRaw ?? "",
+    roleIdRaw ?? "",
+    requestTypeRaw ?? "",
+    statusRaw ?? "",
+    coverageBandRaw ?? "",
+    conflictLevelRaw ?? "",
+    startDateRaw ?? "",
+    endDateRaw ?? "",
+    sortKeyRaw,
+    sortDirRaw,
+    heatmapWeekStart ?? "",
+  ].join("|");
+
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-10 sm:py-14">
       <div className="max-w-3xl">
@@ -254,6 +269,7 @@ export default async function RequestsPage({
 
       <section aria-label="Queue controls" className="mt-8">
         <form
+          key={queueControlsKey}
           method="get"
           className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/40"
         >
@@ -463,12 +479,12 @@ export default async function RequestsPage({
 
           <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-3">
-              <Link
+              <ResetQueueFiltersLink
                 href="/requests"
                 className="rounded-full px-3 py-2 text-sm font-medium text-zinc-700 hover:text-zinc-950 dark:text-zinc-300 dark:hover:text-zinc-50"
               >
                 Clear all
-              </Link>
+              </ResetQueueFiltersLink>
               <button
                 type="submit"
                 className="inline-flex items-center justify-center rounded-full bg-zinc-950 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"

@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo } from "react";
 
 import { useBrowserDecisions } from "../_components/BrowserDecisionProvider";
+import { ResetQueueFiltersLink } from "./ResetQueueFiltersLink";
 import { QueueResultsTable, type QueueTableRow } from "./QueueResultsTable";
 
 import {
@@ -121,12 +121,12 @@ export function QueueResultsPanel({
               >
                 Clear the demo decision filter
               </button>
-              <Link
+              <ResetQueueFiltersLink
                 href={clearAllHref}
                 className="text-sm font-medium text-zinc-950 underline underline-offset-4 hover:text-zinc-700 dark:text-zinc-50 dark:hover:text-zinc-200"
               >
                 Clear filters and show the full queue
-              </Link>
+              </ResetQueueFiltersLink>
             </div>
           </div>
         ) : (
@@ -139,12 +139,12 @@ export function QueueResultsPanel({
               different team.
             </p>
             <div className="mt-4">
-              <Link
+              <ResetQueueFiltersLink
                 href={clearAllHref}
                 className="text-sm font-medium text-zinc-950 underline underline-offset-4 hover:text-zinc-700 dark:text-zinc-50 dark:hover:text-zinc-200"
               >
                 Clear filters and show the full queue
-              </Link>
+              </ResetQueueFiltersLink>
             </div>
           </div>
         )
