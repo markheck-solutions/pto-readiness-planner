@@ -1,20 +1,11 @@
 import { NextResponse } from "next/server";
 
 import { methodNotAllowed } from "../../../src/api/safeError";
-
-function parseBooleanEnv(
-  value: string | undefined,
-  fallback: boolean,
-): boolean {
-  if (value === undefined) return fallback;
-  if (value.toLowerCase() === "true") return true;
-  if (value.toLowerCase() === "false") return false;
-  return fallback;
-}
+import { resolveManagerDraftProvider } from "../../../src/domain/managerDraft/providerMode";
 
 export async function GET() {
-  const demoMode = parseBooleanEnv(process.env.NEXT_PUBLIC_DEMO_MODE, true);
-  const aiProvider = process.env.AI_PROVIDER ?? "mock";
+  const draftProvider = resolveManagerDraftProvider(process.env);
+  const demoMode = draftProvider.demoMode;
 
   // Safe build metadata. Do not include env values like DATABASE_URL or API keys.
   const build = {
@@ -31,7 +22,7 @@ export async function GET() {
       capabilities: {
         publicDemo: demoMode,
         mockAi: true,
-        privateLocalAi: !demoMode && aiProvider === "local",
+        privateLocalAi: draftProvider.source === "local",
       },
       build,
     },

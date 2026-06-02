@@ -6,10 +6,10 @@ import { useBrowserDecision } from "../../_components/BrowserDecisionProvider";
 import { SimulatedDecisionControls } from "../../_components/SimulatedDecisionControls";
 import {
   CoverageBadge,
-  DecisionBadge,
   RecommendationBadge,
   RiskBadge,
 } from "../../_components/StatusBadges";
+import { ManagerDraftPanel } from "./ManagerDraftPanel";
 
 import { EvidenceDrawer } from "./EvidenceDrawer";
 
@@ -448,42 +448,12 @@ export function RequestDetailClient({
             <SimulatedDecisionControls requestId={request.id} />
           </div>
 
-          <section
-            aria-label="Manager response draft context"
-            aria-live="polite"
-            className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/40"
-          >
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <div className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
-                  Manager response draft context
-                </div>
-                <h4 className="mt-1 text-base font-semibold text-zinc-950 dark:text-zinc-50">
-                  {draftContext.title}
-                </h4>
-              </div>
-              <DecisionBadge decision={decision} />
-            </div>
-
-            <p className="mt-3 text-sm leading-6 text-zinc-700 dark:text-zinc-300">
-              {draftContext.summary}
-            </p>
-
-            <ul className="mt-4 space-y-2">
-              {draftContext.callouts.map((callout) => (
-                <li
-                  key={callout}
-                  className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-700 dark:border-zinc-800 dark:bg-zinc-950/30 dark:text-zinc-300"
-                >
-                  {callout}
-                </li>
-              ))}
-            </ul>
-
-            <div className="mt-4 rounded-lg border border-zinc-200 bg-white px-3 py-3 text-xs leading-5 text-zinc-600 dark:border-zinc-800 dark:bg-zinc-950/10 dark:text-zinc-400">
-              No message is generated, sent, or saved in this milestone.
-            </div>
-          </section>
+          <ManagerDraftPanel
+            requestId={request.id}
+            decision={decision}
+            recommendation={assessment.recommendation}
+            draftContext={draftContext}
+          />
         </div>
       </section>
 
