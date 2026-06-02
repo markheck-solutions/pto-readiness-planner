@@ -2,9 +2,11 @@
 
 import { useRef, useState, type MouseEvent } from "react";
 
+import { useBrowserDecision } from "../../_components/BrowserDecisionProvider";
 import { SimulatedDecisionControls } from "../../_components/SimulatedDecisionControls";
 import {
   CoverageBadge,
+  DecisionBadge,
   RecommendationBadge,
   RiskBadge,
 } from "../../_components/StatusBadges";
@@ -13,6 +15,7 @@ import { EvidenceDrawer } from "./EvidenceDrawer";
 
 import type { PtoRequestAssessment } from "../../../src/domain/assessment/createRequestAssessment";
 import { parseIsoDate, type IsoDate } from "../../../src/domain/dates";
+import { buildSimulationDraftContext } from "../../../src/domain/simulation";
 
 type BackupOption = {
   id: string;
@@ -106,8 +109,24 @@ export function RequestDetailClient({
     evidenceIds: string[];
   } | null>(null);
   const openerRef = useRef<HTMLButtonElement | null>(null);
+  const { decision } = useBrowserDecision(request.id);
 
   const availableBackups = backupOptions.filter((option) => option.available);
+  const draftContext = buildSimulationDraftContext({
+    decision,
+    employeeName: employee.displayName,
+    teamName: team.name,
+    roleName: role.name,
+    requestedStartDate: request.requestedStartDate,
+    requestedEndDate: request.requestedEndDate,
+    band: assessment.band,
+    recommendation: assessment.recommendation,
+    topReason:
+      assessment.reasons[0]?.summary ??
+      "No additional coverage reasoning is staged for this request yet.",
+    conflictCount: assessment.conflicts.items.length,
+    availableBackupCount: availableBackups.length,
+  });
 
   const openEvidence = (
     reasonSummary: string,
@@ -419,11 +438,52 @@ export function RequestDetailClient({
           Manager actions (demo only)
         </h3>
         <p className="mt-3 text-sm leading-6 text-zinc-700 dark:text-zinc-300">
-          These controls update browser-only demo state. Nothing is saved and a
-          refresh clears it.
+          These controls update browser-only demo state. The queue, demo
+          filters, and draft context below update in-session only. Nothing is
+          saved and a refresh clears it.
         </p>
-        <div className="mt-4">
-          <SimulatedDecisionControls requestId={request.id} />
+
+        <div className="mt-4 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+          <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/40">
+            <SimulatedDecisionControls requestId={request.id} />
+          </div>
+
+          <section
+            aria-label="Manager response draft context"
+            aria-live="polite"
+            className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/40"
+          >
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
+                  Manager response draft context
+                </div>
+                <h4 className="mt-1 text-base font-semibold text-zinc-950 dark:text-zinc-50">
+                  {draftContext.title}
+                </h4>
+              </div>
+              <DecisionBadge decision={decision} />
+            </div>
+
+            <p className="mt-3 text-sm leading-6 text-zinc-700 dark:text-zinc-300">
+              {draftContext.summary}
+            </p>
+
+            <ul className="mt-4 space-y-2">
+              {draftContext.callouts.map((callout) => (
+                <li
+                  key={callout}
+                  className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-700 dark:border-zinc-800 dark:bg-zinc-950/30 dark:text-zinc-300"
+                >
+                  {callout}
+                </li>
+              ))}
+            </ul>
+
+            <div className="mt-4 rounded-lg border border-zinc-200 bg-white px-3 py-3 text-xs leading-5 text-zinc-600 dark:border-zinc-800 dark:bg-zinc-950/10 dark:text-zinc-400">
+              No message is generated, sent, or saved in this milestone.
+            </div>
+          </section>
         </div>
       </section>
 

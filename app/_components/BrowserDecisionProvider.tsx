@@ -23,6 +23,17 @@ type BrowserDecisionContextValue = {
 const BrowserDecisionContext =
   createContext<BrowserDecisionContextValue | null>(null);
 
+function useBrowserDecisionContext(): BrowserDecisionContextValue {
+  const context = useContext(BrowserDecisionContext);
+  if (!context) {
+    throw new Error(
+      "useBrowserDecision must be used within BrowserDecisionProvider.",
+    );
+  }
+
+  return context;
+}
+
 export function BrowserDecisionProvider({ children }: { children: ReactNode }) {
   const [decisions, setDecisions] = useState<DecisionMap>({});
 
@@ -60,12 +71,7 @@ export function BrowserDecisionProvider({ children }: { children: ReactNode }) {
 }
 
 export function useBrowserDecision(requestId: string) {
-  const context = useContext(BrowserDecisionContext);
-  if (!context) {
-    throw new Error(
-      "useBrowserDecision must be used within BrowserDecisionProvider.",
-    );
-  }
+  const context = useBrowserDecisionContext();
 
   const decision = context.getDecision(requestId);
   return {
@@ -73,4 +79,8 @@ export function useBrowserDecision(requestId: string) {
     setDecision: context.setDecision,
     clearDecision: context.clearDecision,
   };
+}
+
+export function useBrowserDecisions() {
+  return useBrowserDecisionContext();
 }

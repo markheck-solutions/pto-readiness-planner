@@ -64,7 +64,11 @@ test("request detail traces reasons to evidence and shares simulated state", asy
   await expect(page.getByText("Simulated decision: Approve")).toBeVisible();
 
   await page.getByRole("link", { name: "PTO requests" }).click();
-  await expect(page.getByText("Approved in demo")).toBeVisible();
+  await expect(
+    page
+      .getByRole("row", { name: /Avery Park.*REQ-1001/ })
+      .getByLabel("Simulated decision: Approved in demo"),
+  ).toBeVisible();
 
   await page.getByRole("link", { name: /Casey Patel.*REQ-1004/ }).click();
   await expect(
@@ -73,10 +77,18 @@ test("request detail traces reasons to evidence and shares simulated state", asy
   await expect(page.getByText("Simulated decision: Approve")).toHaveCount(0);
 
   await page.getByRole("link", { name: "PTO requests" }).click();
-  await expect(page.getByText("Approved in demo")).toBeVisible();
+  await expect(
+    page
+      .getByRole("row", { name: /Avery Park.*REQ-1001/ })
+      .getByLabel("Simulated decision: Approved in demo"),
+  ).toBeVisible();
 
   await page.reload();
-  await expect(page.getByText("Approved in demo")).toHaveCount(0);
+  await expect(
+    page
+      .getByRole("row", { name: /Avery Park.*REQ-1001/ })
+      .getByLabel("Simulated decision: Approved in demo"),
+  ).toHaveCount(0);
   await expect(
     page
       .getByRole("row", { name: /Avery Park.*REQ-1001/ })

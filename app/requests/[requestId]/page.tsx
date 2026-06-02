@@ -69,12 +69,46 @@ function getDetailPreviewState(
   return null;
 }
 
+function buildSearchParamsHref(
+  pathname: string,
+  params: URLSearchParams,
+): string {
+  const qs = params.toString();
+  return qs ? `${pathname}?${qs}` : pathname;
+}
+
+function buildQueueHref(searchParams: SearchParams): string {
+  const keys = [
+    "teamId",
+    "roleId",
+    "requestType",
+    "status",
+    "demoDecision",
+    "coverageBand",
+    "conflictLevel",
+    "startDate",
+    "endDate",
+    "sort",
+    "dir",
+  ] as const;
+  const params = new URLSearchParams();
+
+  for (const key of keys) {
+    const value = asString(searchParams[key]);
+    if (value) params.set(key, value);
+  }
+
+  return buildSearchParamsHref("/requests", params);
+}
+
 function RequestDetailStatePreview({
   state,
   requestId,
+  queueHref,
 }: {
   state: DetailPreviewState;
   requestId: string;
+  queueHref: string;
 }) {
   const liveHref = `/requests/${requestId}`;
 
@@ -86,7 +120,7 @@ function RequestDetailStatePreview({
         description="This safe state shows the detail surface before a queue row is selected. Recommendation, fairness, evidence, and backup sections stay hidden until a request is opened."
         tone="neutral"
         actions={[
-          { href: "/requests", label: "Open PTO request queue" },
+          { href: queueHref, label: "Open PTO request queue" },
           {
             href: liveHref,
             label: "Open a live request detail",
@@ -113,7 +147,7 @@ function RequestDetailStatePreview({
         actions={[
           { href: liveHref, label: "Return to the live request" },
           {
-            href: "/requests",
+            href: queueHref,
             label: "Back to the queue",
             variant: "secondary",
           },
@@ -135,7 +169,7 @@ function RequestDetailStatePreview({
       actions={[
         { href: liveHref, label: "Retry this request" },
         {
-          href: "/requests",
+          href: queueHref,
           label: "Back to the queue",
           variant: "secondary",
         },
@@ -158,6 +192,7 @@ export default async function RequestDetailPage({
   const { requestId } = await Promise.resolve(params);
   const sp = await Promise.resolve(searchParams ?? {});
   const previewState = getDetailPreviewState(asString(sp.state));
+  const queueHref = buildQueueHref(sp);
 
   if (previewState) {
     return (
@@ -166,7 +201,7 @@ export default async function RequestDetailPage({
           <div>
             <div className="text-xs text-zinc-600 dark:text-zinc-400">
               <Link
-                href="/requests"
+                href={queueHref}
                 className="underline underline-offset-4 hover:text-zinc-950 dark:hover:text-zinc-50"
               >
                 PTO requests
@@ -187,6 +222,7 @@ export default async function RequestDetailPage({
           <RequestDetailStatePreview
             state={previewState}
             requestId={requestId}
+            queueHref={queueHref}
           />
         </div>
       </div>
@@ -243,7 +279,7 @@ export default async function RequestDetailPage({
         <div>
           <div className="text-xs text-zinc-600 dark:text-zinc-400">
             <Link
-              href="/requests"
+              href={queueHref}
               className="underline underline-offset-4 hover:text-zinc-950 dark:hover:text-zinc-50"
             >
               PTO requests
@@ -281,7 +317,7 @@ export default async function RequestDetailPage({
           <p className="mt-2">
             Go back to the{" "}
             <Link
-              href="/requests"
+              href={queueHref}
               className="underline underline-offset-4 hover:text-zinc-950 dark:hover:text-zinc-50"
             >
               PTO request queue

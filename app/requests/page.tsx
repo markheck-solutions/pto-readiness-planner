@@ -1,7 +1,8 @@
 import Link from "next/link";
 
 import { DemoNotice } from "../_components/DemoNotice";
-import { QueueResultsTable, type QueueTableRow } from "./QueueResultsTable";
+import { QueueResultsPanel } from "./QueueResultsPanel";
+import { type QueueTableRow } from "./QueueResultsTable";
 
 import { isIsoDate, type IsoDate } from "../../src/domain/dates";
 import {
@@ -18,6 +19,7 @@ import {
   findTeamById,
   getDemoRepo,
 } from "../../src/repos/demoRepo";
+import { decisionLabel, type DemoDecision } from "../../src/domain/simulation";
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -107,6 +109,7 @@ export default async function RequestsPage({
   const statusRaw = asString(sp.status);
   const coverageBandRaw = asString(sp.coverageBand);
   const conflictLevelRaw = asString(sp.conflictLevel);
+  const demoDecisionRaw = asString(sp.demoDecision);
 
   const startDateRaw = asString(sp.startDate);
   const endDateRaw = asString(sp.endDate);
@@ -158,6 +161,20 @@ export default async function RequestsPage({
       : undefined;
   if (conflictLevelRaw && !conflictLevel)
     errors.push("Invalid conflict level filter.");
+
+  const demoDecisionAllowed = [
+    "none",
+    "approve",
+    "defer",
+    "ask_for_coverage",
+  ] as const;
+  const demoDecision =
+    demoDecisionRaw &&
+    demoDecisionAllowed.includes(demoDecisionRaw as DemoDecision)
+      ? (demoDecisionRaw as DemoDecision)
+      : undefined;
+  if (demoDecisionRaw && !demoDecision)
+    errors.push("Invalid demo decision filter.");
 
   let startDate: IsoDate | undefined;
   let endDate: IsoDate | undefined;
@@ -219,18 +236,16 @@ export default async function RequestsPage({
   if (statusRaw) baseParams.set("status", statusRaw);
   if (coverageBandRaw) baseParams.set("coverageBand", coverageBandRaw);
   if (conflictLevelRaw) baseParams.set("conflictLevel", conflictLevelRaw);
+  if (demoDecisionRaw) baseParams.set("demoDecision", demoDecisionRaw);
   if (startDateRaw) baseParams.set("startDate", startDateRaw);
   if (endDateRaw) baseParams.set("endDate", endDateRaw);
   if (sortKeyRaw) baseParams.set("sort", sortKeyRaw);
   if (sortDirRaw) baseParams.set("dir", sortDirRaw);
 
   const rows: QueueTableRow[] = items.map((item) => {
-    const detailParams = new URLSearchParams(baseParams);
-    detailParams.delete("sort");
-    detailParams.delete("dir");
     return {
       ...item,
-      detailHref: buildSearchParamsHref(`/requests/${item.id}`, detailParams),
+      detailHref: buildSearchParamsHref(`/requests/${item.id}`, baseParams),
     };
   });
 
@@ -262,11 +277,19 @@ export default async function RequestsPage({
       label: `Conflicts: ${conflictLevelRaw}`,
       key: "conflictLevel",
     });
+  if (demoDecisionRaw)
+    activeFilters.push({
+      label: `Demo decision: ${demoDecision ? decisionLabel(demoDecision) : demoDecisionRaw}`,
+      key: "demoDecision",
+    });
   if (startDateRaw && endDateRaw)
     activeFilters.push({
       label: `Dates: ${startDateRaw} to ${endDateRaw}`,
       key: "dateRange",
     });
+
+  const clearDemoDecisionParams = new URLSearchParams(baseParams);
+  clearDemoDecisionParams.delete("demoDecision");
 
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-10 sm:py-14">
@@ -380,6 +403,32 @@ export default async function RequestsPage({
                 <option value="approved">Approved</option>
                 <option value="withdrawn">Withdrawn</option>
               </select>
+            </div>
+
+            <div>
+              <label
+                htmlFor="demoDecision"
+                className="text-xs font-medium text-zinc-600 dark:text-zinc-400"
+              >
+                Demo decision
+              </label>
+              <select
+                id="demoDecision"
+                name="demoDecision"
+                defaultValue={demoDecisionRaw ?? ""}
+                className="mt-1 w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-950 shadow-sm focus:outline-none focus:ring-2 focus:ring-zinc-300 dark:border-zinc-800 dark:bg-zinc-950/40 dark:text-zinc-50 dark:focus:ring-zinc-700"
+              >
+                <option value="">Any browser-session state</option>
+                <option value="none">No simulated decision</option>
+                <option value="approve">Approved in demo</option>
+                <option value="ask_for_coverage">
+                  Ask for coverage in demo
+                </option>
+                <option value="defer">Deferred in demo</option>
+              </select>
+              <p className="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">
+                Browser session only. Refresh clears this simulated state.
+              </p>
             </div>
 
             <div>
@@ -500,13 +549,6 @@ export default async function RequestsPage({
           </div>
 
           <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
-            <div className="text-sm text-zinc-600 dark:text-zinc-400">
-              Showing{" "}
-              <span className="font-mono font-semibold tabular-nums text-zinc-950 dark:text-zinc-50">
-                {items.length}
-              </span>{" "}
-              request{items.length === 1 ? "" : "s"}.
-            </div>
             <div className="flex flex-wrap items-center gap-3">
               <Link
                 href="/requests"
@@ -569,27 +611,15 @@ export default async function RequestsPage({
       </section>
 
       <section aria-label="Queue results" className="mt-6">
-        {rows.length === 0 ? (
-          <div className="rounded-xl border border-zinc-200 bg-white p-6 text-sm text-zinc-700 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-300">
-            <p className="font-medium text-zinc-950 dark:text-zinc-50">
-              No requests match the current filters.
-            </p>
-            <p className="mt-2">
-              Try clearing filters, broadening the date range, or selecting a
-              different team.
-            </p>
-            <div className="mt-4">
-              <Link
-                href="/requests"
-                className="text-sm font-medium text-zinc-950 underline underline-offset-4 hover:text-zinc-700 dark:text-zinc-50 dark:hover:text-zinc-200"
-              >
-                Clear filters and show the full queue
-              </Link>
-            </div>
-          </div>
-        ) : (
-          <QueueResultsTable items={rows} />
-        )}
+        <QueueResultsPanel
+          rows={rows}
+          demoDecisionFilter={demoDecision ?? null}
+          clearAllHref="/requests"
+          clearDemoDecisionHref={buildSearchParamsHref(
+            "/requests",
+            clearDemoDecisionParams,
+          )}
+        />
       </section>
     </div>
   );

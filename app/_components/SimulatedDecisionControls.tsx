@@ -23,7 +23,8 @@ export function SimulatedDecisionControls({
           <span className="font-medium text-zinc-950 dark:text-zinc-50">
             Simulated decision:
           </span>{" "}
-          {bannerLabel}. This is browser-only state and resets on refresh.
+          {bannerLabel}. Queue badges, demo filters, and draft context update in
+          this browser session only. Refresh resets it.
         </div>
       ) : null}
 
