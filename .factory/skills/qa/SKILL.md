@@ -1,86 +1,116 @@
 ---
 name: qa
 description: >
-  Run diff-aware functional QA for Team Coverage and PTO Readiness Planner.
-  Route changed behavior to qa-web and qa-api, capture concise evidence, and
-  write a short QA report.
+  Run diff-aware manual and functional QA for PTO Readiness Planner. Loads the
+  QA config, maps changed files to web/API app surfaces, routes only affected
+  flows to qa-web and qa-api, captures evidence, and writes a concise QA report.
 ---
 
 # QA Orchestrator
 
-Use this skill for functional QA only. Verify real browser and HTTP behavior. Do not use this skill to report lint, typecheck, unit tests, builds, readiness-report output, or static scans.
+**SCOPE: This skill performs manual/functional QA only -- verifying that the application actually works by interacting with it as a real user would in a browser or via HTTP. Do NOT run or report lint, typecheck, unit tests, builds, readiness reports, CodeQL, dependency scans, or other static/CI checks.**
 
 ## Step 1: Load configuration
 
-Read these files first:
+Read these files before deciding scope:
 
 - `.factory/skills/qa/config.yaml`
 - `.factory/skills/qa/REPORT-TEMPLATE.md`
 
-If the config is missing, report `:no_entry: BLOCKED` and stop.
+If either file is missing or unreadable, report `:no_entry: BLOCKED` and stop. Do not infer credentials or secret values from the environment.
 
 ## Step 2: Determine the target
 
-Use the configured local target by default:
+Use `default_target: both` as `local_branch_plus_production_smoke` for app-code changes:
 
-- Local branch code: `http://127.0.0.1:3102`
-- Production smoke: run only when the caller provides an HTTPS base URL
+1. Run local branch-code flows first against `http://127.0.0.1:3102`.
+2. Run production smoke second against `https://pto-readiness-planner.vercel.app` as an additional fixed-target public smoke.
+3. Keep every target read-only, demo-safe, mock-only, and free of real employee/company/customer data.
+4. Never print `.env.local`, tokens, provider keys, database URLs, or secret values.
 
-Rules:
+If the caller explicitly requests only `local`, do not run production smoke. If the caller explicitly requests only `production_smoke`, run the production smoke subset and do not claim branch-code coverage.
 
-1. Test local branch code first.
-2. Never replace local branch testing with production smoke.
-3. Keep all QA read-only.
-4. Do not print `.env.local` or secret values.
+If no app code changed, report `:grey_question: INCONCLUSIVE - No app code changed, so functional QA is not required for this diff.` unless production smoke was explicitly requested.
 
-## Step 3: Analyze the diff
+## Step 3: Analyze git diff
 
-Use `git diff --name-only` to determine scope. Map changed files to the `web` and `api` path patterns from `.factory/skills/qa/config.yaml`.
+Determine changed files with `git diff --name-only` (and include staged changes if relevant to the current worktree). Map changed paths to app definitions in `config.yaml`:
 
-If no app code changed and the diff only touches repo metadata, docs, workflows, or QA skills, report:
+- `web` uses the `qa-web` skill and `agent-browser`.
+- `api` uses the `qa-api` skill and `curl`.
 
-`:grey_question: INCONCLUSIVE - No app code changed, so functional QA is not required for this diff.`
+Files outside configured app `path_patterns` -- for example `.factory/skills/**`, `.github/**`, docs, metadata, and workflow-only changes -- do not trigger app flows by themselves.
 
-If production smoke is explicitly requested, you may still run the smoke subset even when no app code changed.
+When shared paths match both apps, route to both skills but still choose the smallest relevant flow set.
 
-## Step 4: Route to sub-skills
+## Step 4: Local branch-code preflight
 
-- Use `.factory/skills/qa-web/SKILL.md` for browser flows
-- Use `.factory/skills/qa-api/SKILL.md` for API flows
+No Vercel preview deployments were detected for this repository. For PR, branch, and worktree code QA:
 
-Run only the flows that are relevant to the diff, plus one nearby integration or recovery check.
+1. Start the app locally from the repo root with `npm run dev`.
+2. Poll `http://127.0.0.1:3102/api/health` until it responds.
+3. Verify the health response identifies `service` as `pto-readiness-planner` and `demoMode` as `true`.
+4. If port `3102` responds with another service, report `:no_entry: BLOCKED` with the observed health summary and remediation: stop the conflicting service or change the QA target.
+5. Never fall back to production, staging, or any remote URL for branch-code testing. Remote targets run different code and cannot validate the diff.
 
-## Step 5: Local server rules
+## Step 5: Route to sub-skills
 
-When local testing is required:
+Load only the sub-skill for each affected app:
 
-1. Start the app with `npm run dev`.
-2. Poll `http://127.0.0.1:3102/api/health`.
-3. Verify `service` is `pto-readiness-planner`.
-4. Verify `demoMode` is `true`.
-5. If port 3102 responds with the wrong service, report `:no_entry: BLOCKED`.
+- Web-affecting changes: `.factory/skills/qa-web/SKILL.md`
+- API-affecting changes: `.factory/skills/qa-api/SKILL.md`
 
-## Step 6: Evidence rules
+For each affected app, pick flows from that sub-skill's menu that directly cover the diff, plus at most one adjacent integration or recovery flow that proves the change still works in context.
 
-- Save the report to `qa-results/report.md`
-- Use concise text evidence first
-- For browser checks, capture accessibility snapshots and screenshots when helpful
-- For API checks, record the request, status code, and a short sanitized response note
-- Never include secrets, tokens, database URLs, or private provider details
+Do not run unrelated flows. Do not run automated test suites. If no existing flow covers the changed behavior, perform one ad-hoc manual/functional check that directly exercises the changed behavior and record it as a test case.
 
-## Step 7: Report
+For the default `both` target on app-code changes, complete local branch-code relevant flows before production smoke. Production smoke is additional confidence only and must never replace the local result.
 
-Use `.factory/skills/qa/REPORT-TEMPLATE.md`.
+## Step 6: Evidence capture
 
-Keep the report short:
+Write the final report to `qa-results/report.md` using `.factory/skills/qa/REPORT-TEMPLATE.md`.
 
-- Start with `## QA Report`
-- Use one row per tested flow
-- Use only these result values: `:white_check_mark: PASS`, `:x: FAIL`, `:no_entry: BLOCKED`, `:warning: FLAKY`, `:grey_question: INCONCLUSIVE`
-- Add `### Action Required` only when the reviewer must do something
+Evidence rules:
 
-## Known failure modes
+- Prefer concise text evidence that can render inline in a PR comment.
+- For browser checks, capture `agent-browser` accessibility snapshots after meaningful state changes and save screenshots to `qa-results/<run-id>/` when visual proof is useful.
+- For API checks, record the request method/path, status code, and a short sanitized response note.
+- Do not embed broken image links; reference screenshot filenames as downloadable artifacts.
+- Do not include setup/preflight steps as test rows. Test rows must verify user-facing behavior, API behavior, a negative check, or production smoke.
+- Never include secrets, tokens, database URLs, private provider endpoints, or raw environment dumps.
 
-1. Port 3102 can only be used for this app. If `/api/health` returns a different service, stop and report BLOCKED.
-2. Public smoke must remain no-login, demo-safe, and mock-only. If a route asks for auth, fail the relevant flow.
-3. Browser-only simulated decisions should never require a write API call. Treat any decision mutation request as a failure.
+## Step 7: Result and report rules
+
+Use exactly these result values:
+
+- `:white_check_mark: PASS`
+- `:x: FAIL`
+- `:no_entry: BLOCKED`
+- `:warning: FLAKY`
+- `:grey_question: INCONCLUSIVE`
+
+Keep the report short: the table, optional `### Action Required`, optional `### Suggested Skill Updates`, and one collapsed evidence block.
+
+**Never silently skip a flow. If a flow cannot complete, report it as BLOCKED with what was tried and how the user can fix it.** Continue to other relevant flows when safe.
+
+## Step 8: Failure learning
+
+`config.yaml` sets `failure_learning: auto_commit`. When a `BLOCKED` or `FAIL` result reveals a new reusable testing-environment pattern that is not already covered by a sub-skill's Known Failure Modes:
+
+1. Add a `### Suggested Skill Updates` section to the report with the file, section, issue, and exact markdown to add.
+2. Write `qa-results/skill-updates.json` with structured edits in this format:
+
+```json
+[
+  {
+    "file": ".factory/skills/qa-web/SKILL.md",
+    "section": "Known Failure Modes",
+    "action": "append",
+    "content": "6. **New environment pattern.** Describe the durable testing-environment behavior and how future QA should handle it."
+  }
+]
+```
+
+Only write learning entries for environment/workflow knowledge that will help future QA runs. Do not suggest updates for expected product failures, bad selectors, or normal diff-driven UI copy changes.
+
+Because the existing `.github/workflows/qa.yml` is intentionally not regenerated by this install, automatic committing requires a separate workflow update that knows how to consume `qa-results/skill-updates.json`.

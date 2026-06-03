@@ -1,0 +1,188 @@
+status: complete
+project: pto-readiness-planner
+repo_path: 'C:\SoftwareFactory\01-projects\pto-readiness-planner'
+updated_at: "2026-06-02"
+regeneration:
+  rule: Regenerated requested QA skill/config/report/progress files from scratch.
+  wrote_only_requested_paths: true
+  workflows_edited: false
+  workflow_notice: .github/workflows/qa.yml was intentionally not edited.
+
+analysis_summary:
+  app_structure:
+    monorepo: false
+    apps:
+      - name: web
+        type: Next.js App Router web app
+        skill: qa-web
+        test_tool: agent-browser
+        path_patterns:
+          - app/**
+          - src/**
+          - lib/**
+          - public/**
+          - tests/browser/**
+          - playwright.config.ts
+      - name: api
+        type: Next.js App Router route handlers
+        skill: qa-api
+        test_tool: curl
+        path_patterns:
+          - app/api/**
+          - src/**
+          - lib/**
+          - scripts/**
+          - tests/unit/**
+          - tests/browser/api-smoke.spec.ts
+  package_manager: npm
+  framework:
+    name: Next.js
+    router: App Router
+    language: TypeScript
+  commands:
+    dev: npm run dev
+    local_url: http://127.0.0.1:3102
+    health_check: http://127.0.0.1:3102/api/health
+  production:
+    provider: Vercel
+    url: https://pto-readiness-planner.vercel.app
+    role: additional public production smoke only
+  auth:
+    method: none
+    provider: none
+    accounts_required: false
+  preview_deployments:
+    detected: false
+    branch_code_strategy: local dev server
+    restriction: Never fall back to production for branch-code testing.
+  api_routes_detected:
+    - /api/health
+    - /api/demo-data
+    - /api/bootstrap
+    - /api/pto-requests
+    - /api/pto-requests/[requestId]
+    - /api/pto-requests/[requestId]/assessment
+    - /api/calendar-heatmap
+    - /api/coverage
+    - /api/critical-windows
+    - /api/evidence
+    - /api/manager-draft
+  existing_workflows:
+    - .github/workflows/ci.yml
+    - .github/workflows/qa.yml
+    - .github/workflows/codeql.yml
+    - .github/workflows/droid-wiki-refresh.yml
+  external_services:
+    - Vercel
+    - GitHub secrets
+    - Factory wiki refresh
+    - optional local OpenAI-compatible provider
+  default_qa_posture: Public mock-only; no private local AI checks in default QA.
+  imagemagick:
+    detected: true
+    path: 'C:\Program Files\ImageMagick-7.1.2-Q16-HDRI\magick.exe'
+
+questionnaire_answers:
+  default_target:
+    selection: both
+    mode: local_branch_plus_production_smoke
+    local:
+      url: http://127.0.0.1:3102
+      restrictions:
+        - read-only
+        - demo-safe
+        - no real data
+        - branch-code target for PRs and local diffs
+    production:
+      url: https://pto-readiness-planner.vercel.app
+      restrictions:
+        - read-only
+        - demo-safe
+        - public mock-only
+        - additional smoke only
+        - never replace local branch-code testing
+  personas:
+    selection: use_detected_personas
+    roles:
+      - name: sdm-reviewer
+        can_do:
+          - Review first-visit manager value and queue context.
+          - Check coverage risk language and next actions.
+        cannot_do:
+          - Require login or credentials.
+          - View real/private staffing data.
+          - Persist HR decisions.
+      - name: operations-manager
+        can_do:
+          - Review queue triage, filters, heatmap, detail, evidence, browser-only decisions, and drafts.
+        cannot_do:
+          - Create persistent production data.
+          - Trigger server-side decision writes.
+          - Carry stale evidence between request contexts.
+      - name: it-security-reviewer
+        can_do:
+          - Review no-auth posture, read-only APIs, controlled errors, repo secret safety, and mock draft behavior.
+        cannot_do:
+          - Print or store secret values.
+          - Enable private local AI checks in default QA.
+          - Accept provider overrides or expose stack traces/private details.
+      - name: keyboard-user
+        can_do:
+          - Review keyboard navigation, focus recovery, and accessible state changes.
+        cannot_do:
+          - Get trapped in interactive UI.
+          - Lose visible focus after drawers, filters, or previews.
+  critical_flows:
+    selection: use_detected_flows
+    flows:
+      - overview_and_queue
+      - queue_filters_and_reset
+      - heatmap_detail_evidence
+      - browser_decisions_and_manager_drafts
+      - safe_state_previews
+      - read_only_api_smoke
+      - invalid_input_recovery
+      - production_smoke
+      - repo_secret_safety
+  cleanup:
+    selection: no_cleanup_needed
+    auto_cleanup: true
+    strategy: none
+    instructions:
+      - Close browser sessions.
+      - Stop the local dev server if QA started it.
+      - No persistent test data cleanup is expected.
+  external_services:
+    vercel: public production smoke only
+    github_secrets: names/placeholders only; never print values
+    factory_wiki_refresh: existing workflow surface only
+    optional_local_openai_compatible_provider: excluded from default QA
+    database_posture: public mock/read-only; no real database writes
+    manager_drafts: mock only by default
+  feature_flags:
+    provider: none
+    env_toggles:
+      NEXT_PUBLIC_DEMO_MODE: "true"
+      AI_PROVIDER: mock
+  github_action:
+    selection: keep_existing_workflow
+    reason: User was concerned about breakage and instructed not to replace or edit qa.yml.
+    generated_or_edited: false
+  production:
+    selection: fixed_vercel_smoke_plus_local_branch_code
+    fixed_url: https://pto-readiness-planner.vercel.app
+  imagemagick:
+    detected: true
+    path: 'C:\Program Files\ImageMagick-7.1.2-Q16-HDRI\magick.exe'
+  failure_learning:
+    selection: auto_commit
+    implementation_in_skill: Write qa-results/skill-updates.json when BLOCKED/FAIL reveals a new environment pattern and include Suggested Skill Updates in the report.
+    workflow_follow_up: Existing workflow must be updated separately if automatic committing is desired.
+
+generated_files:
+  - 'C:\SoftwareFactory\01-projects\pto-readiness-planner\.factory\skills\qa\config.yaml'
+  - 'C:\SoftwareFactory\01-projects\pto-readiness-planner\.factory\skills\qa\SKILL.md'
+  - 'C:\SoftwareFactory\01-projects\pto-readiness-planner\.factory\skills\qa\REPORT-TEMPLATE.md'
+  - 'C:\SoftwareFactory\01-projects\pto-readiness-planner\.factory\skills\qa-web\SKILL.md'
+  - 'C:\SoftwareFactory\01-projects\pto-readiness-planner\.factory\skills\qa-api\SKILL.md'
+  - 'C:\SoftwareFactory\01-projects\pto-readiness-planner\.factory\skills\qa\.install-progress.yaml'

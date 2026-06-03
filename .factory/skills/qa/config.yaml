@@ -1,102 +1,182 @@
 project: pto-readiness-planner
 package_manager: npm
-framework:
-  app: Next.js
-  next: 16
-  react: 19
+app_structure:
+  monorepo: false
+  framework: Next.js App Router
   language: TypeScript
+imagemagick: true
+imagemagick_path: 'C:\Program Files\ImageMagick-7.1.2-Q16-HDRI\magick.exe'
 
 environments:
   local:
     url: http://127.0.0.1:3102
-    strategy: local_dev_server
+    purpose: branch-code functional QA
     start_command: npm run dev
     health_check: /api/health
-    required_for:
-      - pull_request_branch_code
-      - local_regression
     restrictions:
-      - read_only
-      - branch_code_target_for_pull_requests
+      - read-only
+      - demo-safe
+      - no real employee or company data
+      - no persistent writes expected
+      - must be used for pull request and branch-code validation
+    notes:
+      - Start from the checked-out branch with npm run dev.
+      - Poll /api/health before browser or API flows.
+      - Stop the local dev server after QA.
   production:
-    url: provided-via-workflow-input
-    strategy: smoke_consistency_only
+    url: https://pto-readiness-planner.vercel.app
+    purpose: additional public production smoke
     health_check: /api/health
-    required_for:
-      - production_smoke
-      - consistency_check
     restrictions:
-      - read_only
-      - never_replace_local_pr_testing
+      - read-only
+      - demo-safe
+      - no real employee or company data
+      - no private local AI provider checks
+      - never replace local branch-code testing
+    notes:
+      - Production smoke is additional only.
+      - Local remains the branch-code target for PRs and local diffs.
+      - Use the fixed Vercel URL only for public smoke checks.
 
-default_target:
-  primary: local
-  smoke: production
-  rule: Test local branch code first. Run production smoke only when an HTTPS URL is provided.
+default_target: both
+default_target_mode: local_branch_plus_production_smoke
+target_rules:
+  - Run local branch-code relevant flows first when app code changed.
+  - Run production smoke second as an additional fixed-target check.
+  - If no app code changed, report INCONCLUSIVE unless production smoke is explicitly requested.
+  - No Vercel preview deployments were detected; do not use production as a branch-code fallback.
 
 auth:
   method: none
   provider: none
-
-commands:
-  dev: npm run dev
-  build: npm run build
-  browser: npm run test:browser
-  browser_smoke: npm run test:browser:smoke
-  readiness_report: npm run readiness-report
-  safety: npm run safety
-
-required_env:
-  runtime_defaults:
-    NEXT_PUBLIC_DEMO_MODE: "true"
-    AI_PROVIDER: mock
-    CI: "true"
+  login_required: false
+  credentials_required: false
 
 personas:
   - name: sdm-reviewer
-    description: Reviews first-visit manager value, coverage risk context, and practical next actions.
+    description: Reviews first-visit manager value, coverage risk context, queue clarity, and practical next actions.
+    credentials_source: none
+    test_focus:
+      - overview_and_queue
+      - queue_filters_and_reset
+      - manager-facing decision support
+    cannot_do:
+      - Must not need login, private accounts, or credentials.
+      - Must not see real employee, company, HR, medical, compensation, performance, or confidential staffing data.
+      - Must not be able to persist a final HR approval decision from the public demo.
   - name: operations-manager
-    description: Reviews queue, heatmap, request detail, evidence, and simulation flows.
+    description: Reviews queue triage, heatmap, request detail, evidence, browser-only decisions, and manager drafts.
+    credentials_source: none
+    test_focus:
+      - heatmap_detail_evidence
+      - browser_decisions_and_manager_drafts
+      - invalid_input_recovery
+    cannot_do:
+      - Must not create persistent production data.
+      - Must not make a server-side write for approve, defer, or ask-for-coverage simulation.
+      - Must not see stale evidence after changing request context.
   - name: it-security-reviewer
-    description: Reviews no-login posture, read-only APIs, controlled errors, and no secret leakage.
+    description: Reviews no-auth posture, read-only APIs, controlled errors, no secret leakage, and public mock-only draft behavior.
+    credentials_source: none
+    test_focus:
+      - read_only_api_smoke
+      - repo_secret_safety
+      - production_smoke
+    cannot_do:
+      - Must not print or store secret values.
+      - Must not enable private local OpenAI-compatible provider checks in default QA.
+      - Must not accept client-side provider overrides or unsafe extra fields.
+      - Must not expose stack traces, database URLs, tokens, or private provider details.
   - name: keyboard-user
-    description: Reviews keyboard navigation, focus recovery, and clear state transitions.
+    description: Reviews keyboard reachability, focus recovery, accessible state changes, and safe-state previews.
+    credentials_source: none
+    test_focus:
+      - safe_state_previews
+      - keyboard navigation
+      - focus recovery
+    cannot_do:
+      - Must not get trapped in drawers, dialogs, filters, or route-state previews.
+      - Must not lose visible focus after opening or closing evidence and draft surfaces.
+      - Must not require a pointing device for core review flows.
 
 critical_flows:
   - overview_and_queue
+  - queue_filters_and_reset
   - heatmap_detail_evidence
-  - simulation_and_draft
-  - read_only_api
+  - browser_decisions_and_manager_drafts
+  - safe_state_previews
+  - read_only_api_smoke
   - invalid_input_recovery
-  - production_smoke_when_provided
+  - production_smoke
+  - repo_secret_safety
 
 apps:
   web:
     path_patterns:
       - app/**
+      - src/**
+      - lib/**
       - public/**
       - tests/browser/**
-      - src/**
+      - playwright.config.ts
     skill: qa-web
     test_tool: agent-browser
   api:
     path_patterns:
       - app/api/**
+      - src/**
+      - lib/**
       - scripts/**
       - tests/unit/**
-      - src/**
+      - tests/browser/api-smoke.spec.ts
     skill: qa-api
     test_tool: curl
 
+feature_flags:
+  provider: none
+  note: No hosted feature-flag service detected. Default QA uses public demo/mock mode only.
+  env_toggles:
+    NEXT_PUBLIC_DEMO_MODE: "true"
+    AI_PROVIDER: mock
+
 integrations:
-  hosting:
+  vercel:
     provider: Vercel
-    production_url: supplied at workflow dispatch time
-  drafts:
-    routine_provider: mock
-    optional_local_provider:
-      scope: local_only
+    production_url: https://pto-readiness-planner.vercel.app
+    preview_deployments: none_detected
+    qa_posture: production smoke only; never branch-code replacement
+  github_secrets:
+    provider: GitHub Actions secrets
+    qa_posture: Verify names and repository safety only; never print or store secret values.
+  factory_wiki_refresh:
+    provider: Factory wiki refresh
+    workflow: .github/workflows/droid-wiki-refresh.yml
+    qa_posture: Existing workflow surface only; do not edit during QA skill generation.
+  database_posture:
+    provider: none_for_default_public_qa
+    qa_posture: Demo data and read-only public API checks; no real database writes or private data.
+  manager_drafts:
+    provider: mock
+    qa_posture: Public mock-only drafts in default QA.
+    optional_local_openai_compatible_provider:
+      default_qa: excluded
+      note: Do not include private local AI checks in default QA.
       env_names:
         - OPENAI_COMPATIBLE_BASE_URL
         - OPENAI_COMPATIBLE_API_KEY
         - OPENAI_COMPATIBLE_MODEL
+
+cleanup:
+  auto_cleanup: true
+  strategy: none
+  instructions:
+    - Close agent-browser sessions.
+    - Stop the local dev server if QA started it.
+    - No data cleanup is expected because default QA is read-only and browser simulations reset on refresh.
+
+failure_learning: auto_commit
+failure_learning_notes:
+  write_when: BLOCKED or FAIL reveals a new reusable testing-environment pattern.
+  write_file: qa-results/skill-updates.json
+  report_section: Suggested Skill Updates
+  workflow_notice: Existing .github/workflows/qa.yml was intentionally not regenerated; update that workflow separately if automatic committing of skill updates is desired.
