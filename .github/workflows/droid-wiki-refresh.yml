@@ -15,7 +15,7 @@ jobs:
     timeout-minutes: 35
     env:
       FACTORY_API_KEY: ${{ secrets.FACTORY_API_KEY }}
-      FACTORY_DROID_VERSION: "0.138.0"
+      FACTORY_DROID_VERSION: "0.139.0"
       NEXT_PUBLIC_DEMO_MODE: "true"
       AI_PROVIDER: mock
       NEXT_TELEMETRY_DISABLED: "1"
