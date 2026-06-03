@@ -60,7 +60,7 @@ jobs:
         run: |
           set -o pipefail
           set +e
-          npm exec --yes --package=@factory/cli@${FACTORY_DROID_VERSION} -- droid exec --cwd "$GITHUB_WORKSPACE" --auto high "/wiki" 2>&1 | tee droid-wiki-output.log
+          npm exec --yes --package=@factory/cli@${FACTORY_DROID_VERSION} -- droid exec --cwd "$GITHUB_WORKSPACE" --auto high --disabled-tools task-cli "/wiki" 2>&1 | tee droid-wiki-output.log
           wiki_status=$?
           set -e
           if grep -Fq "GitHub wiki sync failed" droid-wiki-output.log; then
