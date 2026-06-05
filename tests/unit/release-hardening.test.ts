@@ -48,6 +48,7 @@ describe("release hardening scaffold", () => {
     expect(workflow).toContain(
       "npm exec --yes --package=@factory/cli@${FACTORY_DROID_VERSION} -- droid --version",
     );
+    expect(workflow).toContain("Factory-AI/factory-plugins");
     expect(workflow).toContain(
       "droid plugin install --scope user core@factory-plugins",
     );

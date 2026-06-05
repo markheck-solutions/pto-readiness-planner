@@ -52,7 +52,9 @@ jobs:
 
       - name: Install Factory core plugin
         if: steps.factory.outputs.skip == 'false'
-        run: npm exec --yes --package=@factory/cli@${FACTORY_DROID_VERSION} -- droid plugin install --scope user core@factory-plugins
+        run: |
+          npm exec --yes --package=@factory/cli@${FACTORY_DROID_VERSION} -- droid plugin marketplace add https://github.com/Factory-AI/factory-plugins.git
+          npm exec --yes --package=@factory/cli@${FACTORY_DROID_VERSION} -- droid plugin install --scope user core@factory-plugins
 
       - name: Configure git identity for wiki sync
         if: steps.factory.outputs.skip == 'false'
