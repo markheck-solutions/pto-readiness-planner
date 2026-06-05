@@ -156,6 +156,7 @@ function checkWikiWorkflowGate(): {
     "master",
     "contents: write",
     "FACTORY_API_KEY",
+    "GH_TOKEN",
     "npm ci",
     "/wiki",
   ];

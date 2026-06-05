@@ -57,6 +57,9 @@ jobs:
       - name: Generate wiki
         if: steps.factory.outputs.skip == 'false'
         id: generate-wiki
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -o pipefail
           set +e
