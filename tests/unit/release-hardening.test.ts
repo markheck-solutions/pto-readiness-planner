@@ -14,6 +14,7 @@ describe("release hardening scaffold", () => {
       ".factory/skills/qa/REPORT-TEMPLATE.md",
       ".factory/skills/qa-web/SKILL.md",
       ".factory/skills/qa-api/SKILL.md",
+      ".factory/droids/worker.md",
       ".github/workflows/qa.yml",
       ".github/workflows/codeql.yml",
       ".github/workflows/droid-wiki-refresh.yml",
