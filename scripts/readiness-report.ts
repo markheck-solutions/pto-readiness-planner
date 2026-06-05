@@ -155,6 +155,7 @@ function checkWikiWorkflowGate(): {
     "workflow_dispatch",
     "master",
     "contents: write",
+    "fetch-depth: 0",
     "FACTORY_API_KEY",
     "GH_TOKEN",
     "npm ci",

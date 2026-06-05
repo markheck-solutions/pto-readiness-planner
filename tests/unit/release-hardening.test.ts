@@ -44,6 +44,7 @@ describe("release hardening scaffold", () => {
     const workflow = readText(".github/workflows/droid-wiki-refresh.yml");
 
     expect(workflow).toContain('FACTORY_DROID_VERSION: "0.141.1"');
+    expect(workflow).toContain("fetch-depth: 0");
     expect(workflow).toContain(
       "npm exec --yes --package=@factory/cli@${FACTORY_DROID_VERSION} -- droid --version",
     );
