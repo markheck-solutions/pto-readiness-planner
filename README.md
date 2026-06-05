@@ -2,6 +2,8 @@
 
 Portfolio app that helps a manager review PTO requests through coverage risk, role requirements, overlapping requests, critical delivery windows, and fairness context. This is decision support, not an HR workflow.
 
+**Live demo:** <https://pto-readiness-planner.vercel.app>
+
 ## Demo posture and safety
 
 - No login.

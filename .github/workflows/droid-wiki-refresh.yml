@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   wiki-refresh:
@@ -15,7 +15,7 @@ jobs:
     timeout-minutes: 35
     env:
       FACTORY_API_KEY: ${{ secrets.FACTORY_API_KEY }}
-      FACTORY_DROID_VERSION: "0.138.0"
+      FACTORY_DROID_VERSION: "0.139.0"
       NEXT_PUBLIC_DEMO_MODE: "true"
       AI_PROVIDER: mock
       NEXT_TELEMETRY_DISABLED: "1"
@@ -48,16 +48,29 @@ jobs:
         if: steps.factory.outputs.skip == 'false'
         run: npm exec --yes --package=@factory/cli@${FACTORY_DROID_VERSION} -- droid --version
 
+      - name: Configure git identity for wiki sync
+        if: steps.factory.outputs.skip == 'false'
+        run: |
+          git config --global user.name "factory-droid[bot]"
+          git config --global user.email "138933559+factory-droid[bot]@users.noreply.github.com"
+
       - name: Generate wiki
         if: steps.factory.outputs.skip == 'false'
         id: generate-wiki
-        continue-on-error: true
         run: |
           set -o pipefail
-          npm exec --yes --package=@factory/cli@${FACTORY_DROID_VERSION} -- droid exec --cwd "$GITHUB_WORKSPACE" --auto high "/wiki" 2>&1 | tee droid-wiki-output.log
+          set +e
+          npm exec --yes --package=@factory/cli@${FACTORY_DROID_VERSION} -- droid exec --cwd "$GITHUB_WORKSPACE" --skip-permissions-unsafe --disabled-tools task-cli "/wiki" 2>&1 | tee droid-wiki-output.log
+          wiki_status=$?
+          set -e
+          if grep -Fq "GitHub wiki sync failed" droid-wiki-output.log; then
+            echo "::error::GitHub wiki sync failed. Review the droid-wiki-output artifact."
+            exit 1
+          fi
+          exit "$wiki_status"
 
       - name: Report wiki refresh failure
-        if: steps.factory.outputs.skip == 'false' && steps.generate-wiki.outcome == 'failure'
+        if: failure() && steps.factory.outputs.skip == 'false' && steps.generate-wiki.outcome == 'failure'
         run: |
           echo "::warning::Factory Wiki refresh failed. Review the droid-wiki-output artifact and confirm the repository integration is still healthy."
 
