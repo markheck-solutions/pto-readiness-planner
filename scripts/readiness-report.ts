@@ -154,7 +154,7 @@ function checkWikiWorkflowGate(): {
   const requiredSubstrings = [
     "workflow_dispatch",
     "master",
-    "contents: read",
+    "contents: write",
     "FACTORY_API_KEY",
     "npm ci",
     "/wiki",
