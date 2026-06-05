@@ -42,7 +42,7 @@ describe("release hardening scaffold", () => {
   it("uses a pinned auditable Factory Droid install path for wiki refresh", () => {
     const workflow = readText(".github/workflows/droid-wiki-refresh.yml");
 
-    expect(workflow).toContain('FACTORY_DROID_VERSION: "0.139.0"');
+    expect(workflow).toContain('FACTORY_DROID_VERSION: "0.141.1"');
     expect(workflow).toContain(
       "npm exec --yes --package=@factory/cli@${FACTORY_DROID_VERSION} -- droid --version",
     );
