@@ -158,6 +158,7 @@ function checkWikiWorkflowGate(): {
     "fetch-depth: 0",
     "FACTORY_API_KEY",
     "GH_TOKEN",
+    "core@factory-plugins",
     "npm ci",
     "/wiki",
   ];

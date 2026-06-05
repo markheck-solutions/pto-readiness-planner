@@ -50,6 +50,10 @@ jobs:
         if: steps.factory.outputs.skip == 'false'
         run: npm exec --yes --package=@factory/cli@${FACTORY_DROID_VERSION} -- droid --version
 
+      - name: Install Factory core plugin
+        if: steps.factory.outputs.skip == 'false'
+        run: npm exec --yes --package=@factory/cli@${FACTORY_DROID_VERSION} -- droid plugin install --scope user core@factory-plugins
+
       - name: Configure git identity for wiki sync
         if: steps.factory.outputs.skip == 'false'
         run: |

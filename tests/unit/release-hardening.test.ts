@@ -48,6 +48,9 @@ describe("release hardening scaffold", () => {
     expect(workflow).toContain(
       "npm exec --yes --package=@factory/cli@${FACTORY_DROID_VERSION} -- droid --version",
     );
+    expect(workflow).toContain(
+      "droid plugin install --scope user core@factory-plugins",
+    );
     expect(workflow).toContain("GH_TOKEN: ${{ github.token }}");
     expect(workflow).toContain(
       'npm exec --yes --package=@factory/cli@${FACTORY_DROID_VERSION} -- droid exec --cwd "$GITHUB_WORKSPACE" --output-format json --skip-permissions-unsafe "/wiki"',
