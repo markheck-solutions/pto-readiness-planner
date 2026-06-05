@@ -47,7 +47,7 @@ describe("release hardening scaffold", () => {
       "npm exec --yes --package=@factory/cli@${FACTORY_DROID_VERSION} -- droid --version",
     );
     expect(workflow).toContain(
-      'npm exec --yes --package=@factory/cli@${FACTORY_DROID_VERSION} -- droid exec --cwd "$GITHUB_WORKSPACE" --skip-permissions-unsafe --disabled-tools task-cli "/wiki"',
+      'npm exec --yes --package=@factory/cli@${FACTORY_DROID_VERSION} -- droid exec --cwd "$GITHUB_WORKSPACE" --auto high "/wiki"',
     );
     expect(workflow).not.toContain(
       "curl -fsSL https://app.factory.ai/cli | sh",
