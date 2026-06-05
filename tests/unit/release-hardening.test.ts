@@ -50,7 +50,7 @@ describe("release hardening scaffold", () => {
     );
     expect(workflow).toContain("GH_TOKEN: ${{ github.token }}");
     expect(workflow).toContain(
-      'npm exec --yes --package=@factory/cli@${FACTORY_DROID_VERSION} -- droid exec --cwd "$GITHUB_WORKSPACE" --output-format json --auto high "/wiki"',
+      'npm exec --yes --package=@factory/cli@${FACTORY_DROID_VERSION} -- droid exec --cwd "$GITHUB_WORKSPACE" --output-format json --skip-permissions-unsafe "/wiki"',
     );
     expect(workflow).not.toContain(
       "curl -fsSL https://app.factory.ai/cli | sh",
