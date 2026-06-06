@@ -52,10 +52,16 @@ describe("release hardening scaffold", () => {
     expect(workflow).toContain(
       "droid plugin install --scope user core@factory-plugins",
     );
-    expect(workflow).toContain("GH_TOKEN: ${{ github.token }}");
+    expect(workflow).toContain(
+      "GH_TOKEN: ${{ secrets.WIKI_GITHUB_TOKEN || github.token }}",
+    );
+    expect(workflow).toContain("git credential approve");
+    expect(workflow).toContain("password=%s");
     expect(workflow).toContain(
       'npm exec --yes --package=@factory/cli@${FACTORY_DROID_VERSION} -- droid exec --cwd "$GITHUB_WORKSPACE" --output-format json --skip-permissions-unsafe "/wiki"',
     );
+    expect(workflow).not.toContain("FACTORY_BYOK");
+    expect(workflow).not.toContain('--model "custom:AutoWiki-BYOK-0"');
     expect(workflow).not.toContain(
       "curl -fsSL https://app.factory.ai/cli | sh",
     );

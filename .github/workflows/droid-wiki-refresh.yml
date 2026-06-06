@@ -58,16 +58,20 @@ jobs:
 
       - name: Configure git identity for wiki sync
         if: steps.factory.outputs.skip == 'false'
+        env:
+          WIKI_GITHUB_TOKEN: ${{ secrets.WIKI_GITHUB_TOKEN || github.token }}
         run: |
           git config --global user.name "factory-droid[bot]"
           git config --global user.email "138933559+factory-droid[bot]@users.noreply.github.com"
+          git config --global credential.helper store
+          printf "protocol=https\nhost=github.com\nusername=x-access-token\npassword=%s\n\n" "$WIKI_GITHUB_TOKEN" | git credential approve
 
       - name: Generate wiki
         if: steps.factory.outputs.skip == 'false'
         id: generate-wiki
         env:
-          GITHUB_TOKEN: ${{ github.token }}
-          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ secrets.WIKI_GITHUB_TOKEN || github.token }}
+          GH_TOKEN: ${{ secrets.WIKI_GITHUB_TOKEN || github.token }}
         run: |
           set -o pipefail
           set +e
