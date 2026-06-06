@@ -15,11 +15,6 @@ jobs:
     timeout-minutes: 35
     env:
       FACTORY_API_KEY: ${{ secrets.FACTORY_API_KEY }}
-      FACTORY_BYOK_API_KEY: ${{ secrets.FACTORY_BYOK_API_KEY }}
-      FACTORY_BYOK_MODEL_ID: ${{ vars.FACTORY_BYOK_MODEL_ID || 'claude-sonnet-4-5-20250929' }}
-      FACTORY_BYOK_BASE_URL: ${{ vars.FACTORY_BYOK_BASE_URL || 'https://api.anthropic.com' }}
-      FACTORY_BYOK_PROVIDER: ${{ vars.FACTORY_BYOK_PROVIDER || 'anthropic' }}
-      FACTORY_BYOK_MAX_OUTPUT_TOKENS: ${{ vars.FACTORY_BYOK_MAX_OUTPUT_TOKENS || '8192' }}
       FACTORY_DROID_VERSION: "0.141.1"
       NEXT_PUBLIC_DEMO_MODE: "true"
       AI_PROVIDER: mock
@@ -36,9 +31,6 @@ jobs:
           if [ -z "${FACTORY_API_KEY}" ]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
             echo "::warning::FACTORY_API_KEY is not configured. Skipping wiki refresh."
-          elif [ -z "${FACTORY_BYOK_API_KEY}" ]; then
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-            echo "::warning::FACTORY_BYOK_API_KEY is not configured. Skipping wiki refresh."
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
@@ -49,31 +41,6 @@ jobs:
         with:
           node-version: 20
           cache: npm
-
-      - name: Configure Factory BYOK model
-        if: steps.factory.outputs.skip == 'false'
-        run: |
-          mkdir -p "$HOME/.factory"
-          node <<'NODE'
-          const fs = require("node:fs");
-          const path = require("node:path");
-
-          const maxOutputTokens = Number.parseInt(process.env.FACTORY_BYOK_MAX_OUTPUT_TOKENS || "", 10);
-          const settings = {
-            customModels: [
-              {
-                model: process.env.FACTORY_BYOK_MODEL_ID,
-                displayName: "AutoWiki BYOK",
-                baseUrl: process.env.FACTORY_BYOK_BASE_URL,
-                apiKey: "${FACTORY_BYOK_API_KEY}",
-                provider: process.env.FACTORY_BYOK_PROVIDER,
-                maxOutputTokens: Number.isFinite(maxOutputTokens) ? maxOutputTokens : 8192,
-              },
-            ],
-          };
-
-          fs.writeFileSync(path.join(process.env.HOME, ".factory", "settings.json"), JSON.stringify(settings, null, 2));
-          NODE
 
       - name: Install dependencies
         if: steps.factory.outputs.skip == 'false'
@@ -91,20 +58,24 @@ jobs:
 
       - name: Configure git identity for wiki sync
         if: steps.factory.outputs.skip == 'false'
+        env:
+          WIKI_GITHUB_TOKEN: ${{ secrets.WIKI_GITHUB_TOKEN || github.token }}
         run: |
           git config --global user.name "factory-droid[bot]"
           git config --global user.email "138933559+factory-droid[bot]@users.noreply.github.com"
+          git config --global credential.helper store
+          printf "protocol=https\nhost=github.com\nusername=x-access-token\npassword=%s\n\n" "$WIKI_GITHUB_TOKEN" | git credential approve
 
       - name: Generate wiki
         if: steps.factory.outputs.skip == 'false'
         id: generate-wiki
         env:
-          GITHUB_TOKEN: ${{ github.token }}
-          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ secrets.WIKI_GITHUB_TOKEN || github.token }}
+          GH_TOKEN: ${{ secrets.WIKI_GITHUB_TOKEN || github.token }}
         run: |
           set -o pipefail
           set +e
-          npm exec --yes --package=@factory/cli@${FACTORY_DROID_VERSION} -- droid exec --cwd "$GITHUB_WORKSPACE" --output-format json --model "custom:AutoWiki-BYOK-0" --skip-permissions-unsafe "/wiki" 2>&1 | tee droid-wiki-output.log
+          npm exec --yes --package=@factory/cli@${FACTORY_DROID_VERSION} -- droid exec --cwd "$GITHUB_WORKSPACE" --output-format json --skip-permissions-unsafe "/wiki" 2>&1 | tee droid-wiki-output.log
           wiki_status=$?
           set -e
           if grep -Fq "GitHub wiki sync failed" droid-wiki-output.log; then
