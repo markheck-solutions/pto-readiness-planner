@@ -54,7 +54,12 @@ describe("release hardening scaffold", () => {
     );
     expect(workflow).toContain("GH_TOKEN: ${{ github.token }}");
     expect(workflow).toContain(
-      'npm exec --yes --package=@factory/cli@${FACTORY_DROID_VERSION} -- droid exec --cwd "$GITHUB_WORKSPACE" --output-format json --skip-permissions-unsafe "/wiki"',
+      "FACTORY_BYOK_API_KEY: ${{ secrets.FACTORY_BYOK_API_KEY }}",
+    );
+    expect(workflow).toContain('displayName: "AutoWiki BYOK"');
+    expect(workflow).toContain('apiKey: "${FACTORY_BYOK_API_KEY}"');
+    expect(workflow).toContain(
+      'npm exec --yes --package=@factory/cli@${FACTORY_DROID_VERSION} -- droid exec --cwd "$GITHUB_WORKSPACE" --output-format json --model "custom:AutoWiki-BYOK-0" --skip-permissions-unsafe "/wiki"',
     );
     expect(workflow).not.toContain(
       "curl -fsSL https://app.factory.ai/cli | sh",
