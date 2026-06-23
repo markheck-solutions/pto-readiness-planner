@@ -18,6 +18,38 @@ type Section = {
 const DEFAULT_LOCAL_BASE_URL = "http://127.0.0.1:3102";
 const DEFAULT_BRANCH = "master";
 
+const REQUIRED_LOCAL_SCRIPTS = [
+  "format:check",
+  "lint",
+  "typecheck",
+  "test:coverage",
+  "build",
+  "safety",
+  "quality:check",
+  "readme:verify",
+  "readiness-report",
+  "test:browser",
+  "test:browser:smoke",
+  "db:seed",
+  "sql:check",
+];
+
+const CI_WORKFLOW_MARKERS = [
+  "npm ci",
+  "npm run format:check",
+  "npm run lint",
+  "npm run typecheck",
+  "npm run test:coverage",
+  "npm run build",
+  "npm run safety",
+  "npm run sql:check",
+  "postgres:16",
+  "SQL_GATE_DATABASE_URL",
+  "npm run quality:check",
+  "npm run readme:verify",
+  "npm run readiness-report",
+];
+
 function exists(p: string) {
   try {
     fs.accessSync(p, fs.constants.F_OK);
@@ -355,6 +387,7 @@ function computeReadinessLevel(sections: Section[]): number {
     "Secret hygiene (.gitignore)",
     "Playwright smoke flexibility",
     "Safety scan coverage",
+    "SQL supportability gate",
   ]);
 
   const hasAllLevelFourRequirements = sections.every((section) => {
@@ -364,6 +397,221 @@ function computeReadinessLevel(sections: Section[]): number {
 
   if (hasAllLevelFourRequirements) return 4;
   return 3;
+}
+
+function buildInstallExpectationSection() {
+  return section("Install expectation mapping", "PASS", [
+    "- /install-qa equivalent:",
+    "  - .factory/skills/qa plus qa-web and qa-api",
+    "  - .github/workflows/qa.yml for local regression and optional production smoke",
+    "- /install-wiki equivalent:",
+    "  - .github/workflows/droid-wiki-refresh.yml",
+    "- /readiness-report equivalent:",
+    "  - npm script: npm run readiness-report",
+    "  - implementation: scripts/readiness-report.ts",
+  ]);
+}
+
+function buildLocalValidationCommandsSection() {
+  const scriptInventory = readPackageJsonScripts();
+  if (!scriptInventory.ok) {
+    return section("Local validation commands (npm scripts)", "FAIL", [
+      `- ${scriptInventory.reason}`,
+    ]);
+  }
+
+  const missing = REQUIRED_LOCAL_SCRIPTS.filter(
+    (name) => !scriptInventory.scripts[name],
+  );
+  return section(
+    "Local validation commands (npm scripts)",
+    missing.length === 0 ? "PASS" : "FAIL",
+    missing.length === 0
+      ? [
+          "- Required scripts present:",
+          ...REQUIRED_LOCAL_SCRIPTS.map((name) => `  - npm run ${name}`),
+        ]
+      : [
+          "- Missing required scripts:",
+          ...missing.map((name) => `  - ${name}`),
+          "",
+          "- Action:",
+          "  - Add the missing scripts to package.json so CI and reviewers can run consistent gates.",
+        ],
+  );
+}
+
+function buildCiValidationSection() {
+  const ciGate = checkWorkflowMarkers(".github/workflows/ci.yml", [
+    ...CI_WORKFLOW_MARKERS,
+  ]);
+  return section("CI validation wiring", ciGate.status, ciGate.lines);
+}
+
+function buildQaWorkflowSection() {
+  const qaWorkflow = checkWorkflowMarkers(".github/workflows/qa.yml", [
+    "workflow_dispatch",
+    "base_url",
+    "npm ci",
+    "npx playwright install chromium --with-deps",
+    "npm run test:browser",
+    "npm run test:browser:smoke",
+    "PLAYWRIGHT_BASE_URL",
+    "PLAYWRIGHT_SKIP_WEBSERVER",
+    "master",
+  ]);
+  return section("QA workflow wiring", qaWorkflow.status, qaWorkflow.lines);
+}
+
+function buildPlaywrightSmokeSection() {
+  const playwrightLines: string[] = [];
+  const playwrightFailures: string[] = [];
+  const packageScripts = readPackageJsonScripts();
+
+  if (!packageScripts.ok) {
+    playwrightFailures.push(packageScripts.reason);
+  } else if (!packageScripts.scripts["test:browser:smoke"]) {
+    playwrightFailures.push("package.json missing script: test:browser:smoke");
+  } else {
+    playwrightLines.push("- package.json includes npm run test:browser:smoke");
+  }
+
+  const playwrightConfigGate = checkTextIncludesGate("playwright.config.ts", [
+    "PLAYWRIGHT_BASE_URL",
+    "PLAYWRIGHT_SKIP_WEBSERVER",
+  ]);
+
+  if (playwrightConfigGate.status === "FAIL") {
+    playwrightFailures.push(
+      ...playwrightConfigGate.lines.map((line) => line.replace(/^- /, "")),
+    );
+  } else {
+    playwrightLines.push(...playwrightConfigGate.lines);
+  }
+
+  return section(
+    "Playwright smoke flexibility",
+    playwrightFailures.length === 0 ? "PASS" : "FAIL",
+    playwrightFailures.length === 0
+      ? playwrightLines
+      : playwrightFailures.map((line) => `- ${line}`),
+  );
+}
+
+function buildStaticGateSections() {
+  const codeql = checkWorkflowMarkers(".github/workflows/codeql.yml", [
+    "security-events: write",
+    "github/codeql-action/init@v4",
+    "javascript-typescript",
+    "master",
+  ]);
+  const wikiWorkflow = checkWikiWorkflowGate();
+  const dependabot = checkTextIncludesGate(".github/dependabot.yml", [
+    'package-ecosystem: "npm"',
+    'package-ecosystem: "github-actions"',
+    'interval: "weekly"',
+  ]);
+  const branchAssumption = workflowBranchAssumptionChecks();
+  const docGate = checkFileGate([
+    "README.md",
+    "docs/runbooks/operations.md",
+    "docs/validation/INDEX.md",
+    ".github/CODEOWNERS",
+    ".github/pull_request_template.md",
+    ".github/ISSUE_TEMPLATE/bug_report.yml",
+    ".github/ISSUE_TEMPLATE/readiness_task.yml",
+  ]);
+
+  return [
+    section("CodeQL workflow", codeql.status, codeql.lines),
+    section("Wiki refresh workflow", wikiWorkflow.status, wikiWorkflow.lines),
+    section("Dependabot configuration", dependabot.status, dependabot.lines),
+    section(
+      "Workflow default branch assumptions",
+      branchAssumption.status,
+      branchAssumption.lines,
+    ),
+    section(
+      "Docs and reviewer surfaces present",
+      docGate.status,
+      docGate.lines,
+    ),
+  ];
+}
+
+function buildEnvironmentAndQaSections() {
+  const envGate = checkTextIncludesGate(".env.example", [
+    "NEXT_PUBLIC_DEMO_MODE=true",
+    "AI_PROVIDER=mock",
+    "DATABASE_URL=",
+    "SQL_GATE_DATABASE_URL=",
+    "OPENAI_COMPATIBLE_BASE_URL=",
+    "OPENAI_COMPATIBLE_API_KEY=",
+    "OPENAI_COMPATIBLE_MODEL=",
+    "OPENAI_COMPATIBLE_MODEL=",
+  ]);
+  const ignoreGate = checkTextIncludesGate(".gitignore", [
+    ".env*",
+    "!.env.example",
+  ]);
+  const qaSkillGate = checkFileGate([
+    ".factory/skills/qa/SKILL.md",
+    ".factory/skills/qa/config.yaml",
+    ".factory/skills/qa/REPORT-TEMPLATE.md",
+    ".factory/skills/qa-web/SKILL.md",
+    ".factory/skills/qa-api/SKILL.md",
+  ]);
+
+  return [
+    section(
+      "Environment contract (.env.example)",
+      envGate.status,
+      envGate.lines,
+    ),
+    section("Secret hygiene (.gitignore)", ignoreGate.status, ignoreGate.lines),
+    section("QA skill surfaces", qaSkillGate.status, qaSkillGate.lines),
+  ];
+}
+
+function buildSupportabilitySections() {
+  const safetyCoverage = checkTextIncludesGate("scripts/demo-safety-scan.ts", [
+    "REPO_SCAN_ROOTS",
+    ".factory",
+    "BUILD_SCAN_ROOTS",
+    ".next/static",
+    "ARTIFACT_SCAN_ROOTS",
+    "commit messages",
+    "git log",
+  ]);
+  const sqlGate = checkTextIncludesGate("scripts/sql-supportability-check.ts", [
+    "discoverSqlSupportability",
+    "SQL_GATE_DATABASE_URL",
+    "bootstrapDemoSchema",
+    "seedDemoDataset",
+    "Gate implementation:",
+    "Repo SQL supportability:",
+    "SQL behavior proof:",
+    "sha256Json",
+  ]);
+
+  return [
+    section(
+      "Safety scan coverage",
+      safetyCoverage.status,
+      safetyCoverage.lines,
+    ),
+    section("SQL supportability gate", sqlGate.status, sqlGate.lines),
+  ];
+}
+
+function buildDependencyAuditSection() {
+  const audit = safeRun("npm audit --json");
+  const auditSection = buildAuditSection(audit);
+  return section(
+    "Dependency audit (npm audit)",
+    auditSection.status,
+    auditSection.lines,
+  );
 }
 
 async function main() {
@@ -379,243 +627,17 @@ async function main() {
   console.log(`Repo: ${process.cwd()}`);
   console.log(`Commit: ${sha}`);
 
-  const sections: Section[] = [];
-
-  sections.push(
-    section("Install expectation mapping", "PASS", [
-      "- /install-qa equivalent:",
-      "  - .factory/skills/qa plus qa-web and qa-api",
-      "  - .github/workflows/qa.yml for local regression and optional production smoke",
-      "- /install-wiki equivalent:",
-      "  - .github/workflows/droid-wiki-refresh.yml",
-      "- /readiness-report equivalent:",
-      "  - npm script: npm run readiness-report",
-      "  - implementation: scripts/readiness-report.ts",
-    ]),
-  );
-
-  // Local validation command inventory
-  const scriptInventory = readPackageJsonScripts();
-  if (!scriptInventory.ok) {
-    sections.push(
-      section("Local validation commands (npm scripts)", "FAIL", [
-        `- ${scriptInventory.reason}`,
-      ]),
-    );
-  } else {
-    const requiredScripts = [
-      "format:check",
-      "lint",
-      "typecheck",
-      "test:coverage",
-      "build",
-      "safety",
-      "quality:check",
-      "readme:verify",
-      "readiness-report",
-      "test:browser",
-      "test:browser:smoke",
-      "db:seed",
-    ];
-
-    const missing = requiredScripts.filter(
-      (name) => !scriptInventory.scripts[name],
-    );
-    sections.push(
-      section(
-        "Local validation commands (npm scripts)",
-        missing.length === 0 ? "PASS" : "FAIL",
-        missing.length === 0
-          ? [
-              "- Required scripts present:",
-              ...requiredScripts.map((n) => `  - npm run ${n}`),
-            ]
-          : [
-              "- Missing required scripts:",
-              ...missing.map((n) => `  - ${n}`),
-              "",
-              "- Action:",
-              "  - Add the missing scripts to package.json so CI and reviewers can run consistent gates.",
-            ],
-      ),
-    );
-  }
-
-  // CI present
-  const ciGate = checkWorkflowMarkers(".github/workflows/ci.yml", [
-    "npm ci",
-    "npm run format:check",
-    "npm run lint",
-    "npm run typecheck",
-    "npm run test:coverage",
-    "npm run build",
-    "npm run safety",
-    "npm run quality:check",
-    "npm run readme:verify",
-    "npm run readiness-report",
-  ]);
-  sections.push(section("CI validation wiring", ciGate.status, ciGate.lines));
-
-  const qaWorkflow = checkWorkflowMarkers(".github/workflows/qa.yml", [
-    "workflow_dispatch",
-    "base_url",
-    "npm ci",
-    "npx playwright install chromium --with-deps",
-    "npm run test:browser",
-    "npm run test:browser:smoke",
-    "PLAYWRIGHT_BASE_URL",
-    "PLAYWRIGHT_SKIP_WEBSERVER",
-    "master",
-  ]);
-  sections.push(
-    section("QA workflow wiring", qaWorkflow.status, qaWorkflow.lines),
-  );
-
-  const codeql = checkWorkflowMarkers(".github/workflows/codeql.yml", [
-    "security-events: write",
-    "github/codeql-action/init@v4",
-    "javascript-typescript",
-    "master",
-  ]);
-  sections.push(section("CodeQL workflow", codeql.status, codeql.lines));
-
-  const wikiWorkflow = checkWikiWorkflowGate();
-  sections.push(
-    section("Wiki refresh workflow", wikiWorkflow.status, wikiWorkflow.lines),
-  );
-
-  const dependabot = checkTextIncludesGate(".github/dependabot.yml", [
-    'package-ecosystem: "npm"',
-    'package-ecosystem: "github-actions"',
-    'interval: "weekly"',
-  ]);
-  sections.push(
-    section("Dependabot configuration", dependabot.status, dependabot.lines),
-  );
-
-  const branchAssumption = workflowBranchAssumptionChecks();
-  sections.push(
-    section(
-      "Workflow default branch assumptions",
-      branchAssumption.status,
-      branchAssumption.lines,
-    ),
-  );
-
-  // Docs + reviewer surfaces
-  const docGate = checkFileGate([
-    "README.md",
-    "docs/runbooks/operations.md",
-    "docs/validation/INDEX.md",
-    ".github/CODEOWNERS",
-    ".github/pull_request_template.md",
-    ".github/ISSUE_TEMPLATE/bug_report.yml",
-    ".github/ISSUE_TEMPLATE/readiness_task.yml",
-  ]);
-  sections.push(
-    section(
-      "Docs and reviewer surfaces present",
-      docGate.status,
-      docGate.lines,
-    ),
-  );
-
-  // Env contract + ignore markers
-  const envGate = checkTextIncludesGate(".env.example", [
-    "NEXT_PUBLIC_DEMO_MODE=true",
-    "AI_PROVIDER=mock",
-    "DATABASE_URL=",
-    "OPENAI_COMPATIBLE_BASE_URL=",
-    "OPENAI_COMPATIBLE_API_KEY=",
-    "OPENAI_COMPATIBLE_MODEL=",
-    "OPENAI_COMPATIBLE_MODEL=",
-  ]);
-  sections.push(
-    section(
-      "Environment contract (.env.example)",
-      envGate.status,
-      envGate.lines,
-    ),
-  );
-
-  const ignoreGate = checkTextIncludesGate(".gitignore", [
-    ".env*",
-    "!.env.example",
-  ]);
-  sections.push(
-    section("Secret hygiene (.gitignore)", ignoreGate.status, ignoreGate.lines),
-  );
-
-  const qaSkillGate = checkFileGate([
-    ".factory/skills/qa/SKILL.md",
-    ".factory/skills/qa/config.yaml",
-    ".factory/skills/qa/REPORT-TEMPLATE.md",
-    ".factory/skills/qa-web/SKILL.md",
-    ".factory/skills/qa-api/SKILL.md",
-  ]);
-  sections.push(
-    section("QA skill surfaces", qaSkillGate.status, qaSkillGate.lines),
-  );
-
-  const playwrightLines: string[] = [];
-  const playwrightFailures: string[] = [];
-  const packageScripts = readPackageJsonScripts();
-  if (!packageScripts.ok) {
-    playwrightFailures.push(packageScripts.reason);
-  } else if (!packageScripts.scripts["test:browser:smoke"]) {
-    playwrightFailures.push("package.json missing script: test:browser:smoke");
-  } else {
-    playwrightLines.push("- package.json includes npm run test:browser:smoke");
-  }
-
-  const playwrightConfigGate = checkTextIncludesGate("playwright.config.ts", [
-    "PLAYWRIGHT_BASE_URL",
-    "PLAYWRIGHT_SKIP_WEBSERVER",
-  ]);
-  if (playwrightConfigGate.status === "FAIL") {
-    playwrightFailures.push(
-      ...playwrightConfigGate.lines.map((line) => line.replace(/^- /, "")),
-    );
-  } else {
-    playwrightLines.push(...playwrightConfigGate.lines);
-  }
-  sections.push(
-    section(
-      "Playwright smoke flexibility",
-      playwrightFailures.length === 0 ? "PASS" : "FAIL",
-      playwrightFailures.length === 0
-        ? playwrightLines
-        : playwrightFailures.map((line) => `- ${line}`),
-    ),
-  );
-
-  const safetyCoverage = checkTextIncludesGate("scripts/demo-safety-scan.ts", [
-    "REPO_SCAN_ROOTS",
-    ".factory",
-    "BUILD_SCAN_ROOTS",
-    ".next/static",
-    "ARTIFACT_SCAN_ROOTS",
-    "commit messages",
-    "git log",
-  ]);
-  sections.push(
-    section(
-      "Safety scan coverage",
-      safetyCoverage.status,
-      safetyCoverage.lines,
-    ),
-  );
-
-  // npm audit triage
-  const audit = safeRun("npm audit --json");
-  const auditSection = buildAuditSection(audit);
-  sections.push(
-    section(
-      "Dependency audit (npm audit)",
-      auditSection.status,
-      auditSection.lines,
-    ),
-  );
+  const sections = [
+    buildInstallExpectationSection(),
+    buildLocalValidationCommandsSection(),
+    buildCiValidationSection(),
+    buildQaWorkflowSection(),
+    ...buildStaticGateSections(),
+    ...buildEnvironmentAndQaSections(),
+    buildPlaywrightSmokeSection(),
+    ...buildSupportabilitySections(),
+    buildDependencyAuditSection(),
+  ];
 
   for (const s of sections) printSection(s);
 

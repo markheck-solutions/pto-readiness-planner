@@ -44,12 +44,15 @@ npm run typecheck
 npm run test:coverage
 npm run build
 npm run safety
+npm run sql:check
 npm run quality:check
 npm run readme:verify
 npm run readiness-report
 npm run test:browser
 npm run test:browser:smoke
 ```
+
+`npm run sql:check` requires `SQL_GATE_DATABASE_URL` to point at a local or disposable Postgres database. CI provides a disposable Postgres service for this gate.
 
 The smoke suite can target a deployed demo by setting `PLAYWRIGHT_BASE_URL` to the HTTPS URL and `PLAYWRIGHT_SKIP_WEBSERVER=1` before running `npm run test:browser:smoke`.
 

@@ -17,10 +17,13 @@ npm run typecheck
 npm run test:coverage
 npm run build
 npm run safety
+npm run sql:check
 npm run quality:check
 npm run readme:verify
 npm run readiness-report
 ```
+
+`npm run sql:check` requires `SQL_GATE_DATABASE_URL` to point at a local or disposable Postgres database. The gate extracts seed SQL, hashes SQL/sink/dependency metadata, bootstraps the schema, seeds the demo dataset, verifies table counts plus dataset fingerprint, and reruns the seed to prove idempotence.
 
 Browser tests:
 

@@ -12,6 +12,20 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: pto_readiness
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -42,6 +56,17 @@ jobs:
 
       - name: Demo safety scan
         run: npm run safety
+
+      - name: SQL supportability gate
+        env:
+          SQL_GATE_DB: pto_readiness
+          SQL_GATE_HOST: localhost
+          SQL_GATE_PASSWORD: postgres
+          SQL_GATE_SCHEME: postgresql
+          SQL_GATE_USER: postgres
+        run: |
+          export SQL_GATE_DATABASE_URL="${SQL_GATE_SCHEME}://${SQL_GATE_USER}:${SQL_GATE_PASSWORD}@${SQL_GATE_HOST}:5432/${SQL_GATE_DB}"
+          npm run sql:check
 
       - name: Quality gates
         run: npm run quality:check
