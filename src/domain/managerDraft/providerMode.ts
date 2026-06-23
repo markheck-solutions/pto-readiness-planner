@@ -50,60 +50,68 @@ export function isLocalBaseUrl(value: string): boolean {
   }
 }
 
+function mockProvider(
+  demoMode: boolean,
+  warnings: ManagerDraftWarning[] = [],
+): ResolvedManagerDraftProvider {
+  return {
+    demoMode,
+    source: "mock",
+    warnings,
+    localConfig: null,
+  };
+}
+
+function localProvider(
+  demoMode: boolean,
+  localConfig: LocalProviderConfig,
+): ResolvedManagerDraftProvider {
+  return {
+    demoMode,
+    source: "local",
+    warnings: [],
+    localConfig,
+  };
+}
+
+function providerUsesMockFallback(provider: string) {
+  return provider === "" || provider === "mock";
+}
+
+function readLocalProviderConfig(env: NodeJS.ProcessEnv): LocalProviderConfig {
+  return {
+    baseUrl: env.OPENAI_COMPATIBLE_BASE_URL?.trim() ?? "",
+    apiKey: env.OPENAI_COMPATIBLE_API_KEY?.trim() ?? "",
+    model: env.OPENAI_COMPATIBLE_MODEL?.trim() ?? "",
+  };
+}
+
+function localProviderWarning(
+  config: LocalProviderConfig,
+): ManagerDraftWarning | null {
+  if (!config.baseUrl || !config.apiKey || !config.model) {
+    return "local_provider_config_incomplete";
+  }
+  if (!isLocalBaseUrl(config.baseUrl)) return "local_provider_url_rejected";
+  return null;
+}
+
 export function resolveManagerDraftProvider(
   env: NodeJS.ProcessEnv = process.env,
 ): ResolvedManagerDraftProvider {
   const demoMode = parseBooleanEnv(env.NEXT_PUBLIC_DEMO_MODE, true);
   const provider = (env.AI_PROVIDER ?? "mock").trim().toLowerCase();
 
-  if (demoMode || provider === "" || provider === "mock") {
-    return {
-      demoMode,
-      source: "mock",
-      warnings: [],
-      localConfig: null,
-    };
-  }
+  if (demoMode || providerUsesMockFallback(provider))
+    return mockProvider(demoMode);
 
   if (provider !== "local") {
-    return {
-      demoMode,
-      source: "mock",
-      warnings: ["unsupported_provider"],
-      localConfig: null,
-    };
+    return mockProvider(demoMode, ["unsupported_provider"]);
   }
 
-  const baseUrl = env.OPENAI_COMPATIBLE_BASE_URL?.trim() ?? "";
-  const apiKey = env.OPENAI_COMPATIBLE_API_KEY?.trim() ?? "";
-  const model = env.OPENAI_COMPATIBLE_MODEL?.trim() ?? "";
+  const localConfig = readLocalProviderConfig(env);
+  const warning = localProviderWarning(localConfig);
+  if (warning) return mockProvider(demoMode, [warning]);
 
-  if (!baseUrl || !apiKey || !model) {
-    return {
-      demoMode,
-      source: "mock",
-      warnings: ["local_provider_config_incomplete"],
-      localConfig: null,
-    };
-  }
-
-  if (!isLocalBaseUrl(baseUrl)) {
-    return {
-      demoMode,
-      source: "mock",
-      warnings: ["local_provider_url_rejected"],
-      localConfig: null,
-    };
-  }
-
-  return {
-    demoMode,
-    source: "local",
-    warnings: [],
-    localConfig: {
-      baseUrl,
-      apiKey,
-      model,
-    },
-  };
+  return localProvider(demoMode, localConfig);
 }

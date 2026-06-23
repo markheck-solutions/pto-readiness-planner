@@ -1,8 +1,11 @@
 import type {
   DemoCoverageBand,
+  DemoEmployee,
   DemoPtoRequest,
+  DemoRole,
   DemoRequestStatus,
   DemoRequestType,
+  DemoTeam,
 } from "../../demo/dataset";
 import type { DemoRepo } from "../../repos/demoRepo";
 import type { IsoDate } from "../dates";
@@ -88,139 +91,240 @@ function recommendationRank(
   return 0;
 }
 
+function compareIds(a: QueueItem, b: QueueItem) {
+  if (a.id === b.id) return 0;
+  return a.id < b.id ? -1 : 1;
+}
+
+function compareStartDateThenId(a: QueueItem, b: QueueItem, direction: number) {
+  if (a.requestedStartDate !== b.requestedStartDate) {
+    return direction * (a.requestedStartDate < b.requestedStartDate ? -1 : 1);
+  }
+  return compareIds(a, b);
+}
+
+function compareRankThenScoreThenId(
+  rankA: number,
+  rankB: number,
+  a: QueueItem,
+  b: QueueItem,
+  direction: number,
+) {
+  const delta = rankA - rankB;
+  if (delta !== 0) return direction * delta;
+  if (a.assessment.score !== b.assessment.score) {
+    return direction * (a.assessment.score - b.assessment.score);
+  }
+  return compareIds(a, b);
+}
+
+function compareRecommendation(a: QueueItem, b: QueueItem, direction: number) {
+  return compareRankThenScoreThenId(
+    recommendationRank(a.assessment.recommendation),
+    recommendationRank(b.assessment.recommendation),
+    a,
+    b,
+    direction,
+  );
+}
+
+function compareConflict(a: QueueItem, b: QueueItem, direction: number) {
+  return compareRankThenScoreThenId(
+    conflictRank(a.assessment.conflictLevel),
+    conflictRank(b.assessment.conflictLevel),
+    a,
+    b,
+    direction,
+  );
+}
+
+function compareRisk(a: QueueItem, b: QueueItem, direction: number) {
+  if (a.assessment.score !== b.assessment.score) {
+    return direction * (a.assessment.score - b.assessment.score);
+  }
+  return compareStartDateThenId(a, b, direction);
+}
+
+function compareQueueItemsByKey(
+  a: QueueItem,
+  b: QueueItem,
+  key: QueueSortKey,
+  direction: number,
+) {
+  if (key === "start_date") return compareStartDateThenId(a, b, direction);
+  if (key === "recommendation") return compareRecommendation(a, b, direction);
+  if (key === "conflict") return compareConflict(a, b, direction);
+  return compareRisk(a, b, direction);
+}
+
 export function sortQueueItems(
   items: QueueItem[],
   key: QueueSortKey,
   dir: QueueSortDir,
 ): QueueItem[] {
   const direction = dir === "asc" ? 1 : -1;
-  return items.slice().sort((a, b) => {
-    if (key === "start_date") {
-      if (a.requestedStartDate !== b.requestedStartDate) {
-        return (
-          direction * (a.requestedStartDate < b.requestedStartDate ? -1 : 1)
-        );
-      }
-      if (a.id !== b.id) return a.id < b.id ? -1 : 1;
-      return 0;
-    }
+  return items
+    .slice()
+    .sort((a, b) => compareQueueItemsByKey(a, b, key, direction));
+}
 
-    if (key === "recommendation") {
-      const delta =
-        recommendationRank(a.assessment.recommendation) -
-        recommendationRank(b.assessment.recommendation);
-      if (delta !== 0) return direction * delta;
-      if (a.assessment.score !== b.assessment.score) {
-        return direction * (a.assessment.score - b.assessment.score);
-      }
-      return a.id < b.id ? -1 : 1;
-    }
+type RequestContext = {
+  request: DemoPtoRequest;
+  employee: DemoEmployee;
+  team: DemoTeam;
+  role: DemoRole;
+};
 
-    if (key === "conflict") {
-      const delta =
-        conflictRank(a.assessment.conflictLevel) -
-        conflictRank(b.assessment.conflictLevel);
-      if (delta !== 0) return direction * delta;
-      if (a.assessment.score !== b.assessment.score) {
-        return direction * (a.assessment.score - b.assessment.score);
-      }
-      return a.id < b.id ? -1 : 1;
-    }
+function resolveRequestContext(
+  repo: DemoRepo,
+  request: DemoPtoRequest,
+): RequestContext | null {
+  const employee = repo.employees.find((e) => e.id === request.employeeId);
+  if (!employee) return null;
+  const team = repo.teams.find((t) => t.id === employee.teamId);
+  const role = repo.roles.find((r) => r.id === employee.roleId);
+  if (!team || !role) return null;
+  return { request, employee, team, role };
+}
 
-    if (a.assessment.score !== b.assessment.score) {
-      return direction * (a.assessment.score - b.assessment.score);
+function normalizeOptionalDateRange(filters: QueueFilters) {
+  if (!filters.startDate || !filters.endDate) return null;
+  return normalizeDateRange({ start: filters.startDate, end: filters.endDate });
+}
+
+function requestMatchesIdentityFilters(
+  context: RequestContext,
+  filters: QueueFilters,
+) {
+  if (filters.teamId && context.team.id !== filters.teamId) return false;
+  if (filters.roleId && context.role.id !== filters.roleId) return false;
+  if (
+    filters.requestType &&
+    context.request.requestType !== filters.requestType
+  )
+    return false;
+  if (filters.status && context.request.status !== filters.status) return false;
+  return true;
+}
+
+function requestMatchesDateFilter(
+  request: DemoPtoRequest,
+  dateRange: { start: IsoDate; end: IsoDate } | null,
+) {
+  return !dateRange || filterByDateRange(request, dateRange);
+}
+
+function assessmentMatchesFilters(
+  assessment: ReturnType<typeof createAssessmentForRequest>,
+  filters: QueueFilters,
+) {
+  if (filters.coverageBand && assessment.band !== filters.coverageBand) {
+    return false;
+  }
+  if (
+    filters.conflictLevel &&
+    assessment.conflicts.level !== filters.conflictLevel
+  )
+    return false;
+  return true;
+}
+
+function defaultTopReason(
+  assessment: ReturnType<typeof createAssessmentForRequest>,
+) {
+  return (
+    assessment.reasons[0] ?? {
+      code: "none",
+      summary: "No elevated risk signals detected in the demo dataset.",
     }
-    if (a.requestedStartDate !== b.requestedStartDate) {
-      return direction * (a.requestedStartDate < b.requestedStartDate ? -1 : 1);
-    }
-    return a.id < b.id ? -1 : 1;
+  );
+}
+
+function buildQueueItemFromAssessment(
+  context: RequestContext,
+  assessment: ReturnType<typeof createAssessmentForRequest>,
+): QueueItem {
+  const { request, employee, team, role } = context;
+  const topReason = defaultTopReason(assessment);
+
+  return {
+    id: request.id,
+    employee: { id: employee.id, displayName: employee.displayName },
+    team: { id: team.id, name: team.name },
+    role: { id: role.id, name: role.name },
+    requestType: request.requestType,
+    status: request.status,
+    requestedStartDate: request.requestedStartDate,
+    requestedEndDate: request.requestedEndDate,
+    submittedAt: request.submittedAt,
+    assessment: {
+      score: assessment.score,
+      band: assessment.band,
+      recommendation: assessment.recommendation,
+      topReason: { code: topReason.code, summary: topReason.summary },
+      conflictLevel: assessment.conflicts.level,
+    },
+  };
+}
+
+function buildQueueItem(
+  repo: DemoRepo,
+  request: DemoPtoRequest,
+  filters: QueueFilters,
+  dateRange: { start: IsoDate; end: IsoDate } | null,
+): QueueItem | null {
+  const context = resolveRequestContext(repo, request);
+  if (!context) return null;
+  if (!requestMatchesIdentityFilters(context, filters)) return null;
+  if (!requestMatchesDateFilter(request, dateRange)) return null;
+
+  const assessment = createAssessmentForRequest({
+    repo,
+    request,
+    teamId: context.team.id,
+    roleId: context.role.id,
   });
+
+  if (!assessmentMatchesFilters(assessment, filters)) return null;
+  return buildQueueItemFromAssessment(context, assessment);
+}
+
+function defaultQueueSort(a: QueueItem, b: QueueItem) {
+  if (a.assessment.score !== b.assessment.score)
+    return b.assessment.score - a.assessment.score;
+  if (a.requestedStartDate !== b.requestedStartDate)
+    return a.requestedStartDate < b.requestedStartDate ? -1 : 1;
+  return compareIds(a, b);
+}
+
+function buildQueueMeta(
+  filters: QueueFilters,
+  dateRange: { start: IsoDate; end: IsoDate } | null,
+  total: number,
+) {
+  return {
+    total,
+    filters: {
+      ...filters,
+      ...(dateRange
+        ? { startDate: dateRange.start, endDate: dateRange.end }
+        : {}),
+    },
+  };
 }
 
 export function buildQueue(args: { repo: DemoRepo; filters: QueueFilters }) {
   const { repo, filters } = args;
-
-  const dateRange =
-    filters.startDate && filters.endDate
-      ? normalizeDateRange({ start: filters.startDate, end: filters.endDate })
-      : null;
-
-  const items: QueueItem[] = [];
-
-  for (const request of repo.ptoRequests) {
-    const employee = repo.employees.find((e) => e.id === request.employeeId);
-    if (!employee) continue;
-    const team = repo.teams.find((t) => t.id === employee.teamId);
-    const role = repo.roles.find((r) => r.id === employee.roleId);
-    if (!team || !role) continue;
-
-    if (filters.teamId && team.id !== filters.teamId) continue;
-    if (filters.roleId && role.id !== filters.roleId) continue;
-    if (filters.requestType && request.requestType !== filters.requestType)
-      continue;
-    if (filters.status && request.status !== filters.status) continue;
-
-    if (dateRange && !filterByDateRange(request, dateRange)) continue;
-
-    const assessment = createAssessmentForRequest({
-      repo,
-      request,
-      teamId: team.id,
-      roleId: role.id,
-    });
-
-    if (filters.coverageBand && assessment.band !== filters.coverageBand)
-      continue;
-    if (
-      filters.conflictLevel &&
-      assessment.conflicts.level !== filters.conflictLevel
-    )
-      continue;
-
-    const topReason = assessment.reasons[0] ?? {
-      code: "none",
-      summary: "No elevated risk signals detected in the demo dataset.",
-    };
-
-    items.push({
-      id: request.id,
-      employee: { id: employee.id, displayName: employee.displayName },
-      team: { id: team.id, name: team.name },
-      role: { id: role.id, name: role.name },
-      requestType: request.requestType,
-      status: request.status,
-      requestedStartDate: request.requestedStartDate,
-      requestedEndDate: request.requestedEndDate,
-      submittedAt: request.submittedAt,
-      assessment: {
-        score: assessment.score,
-        band: assessment.band,
-        recommendation: assessment.recommendation,
-        topReason: { code: topReason.code, summary: topReason.summary },
-        conflictLevel: assessment.conflicts.level,
-      },
-    });
-  }
+  const dateRange = normalizeOptionalDateRange(filters);
+  const items = repo.ptoRequests
+    .map((request) => buildQueueItem(repo, request, filters, dateRange))
+    .filter((item): item is QueueItem => item !== null);
 
   // Deterministic ordering: highest risk first, then start date, then id.
-  items.sort((a, b) => {
-    if (a.assessment.score !== b.assessment.score)
-      return b.assessment.score - a.assessment.score;
-    if (a.requestedStartDate !== b.requestedStartDate)
-      return a.requestedStartDate < b.requestedStartDate ? -1 : 1;
-    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
-  });
+  items.sort(defaultQueueSort);
 
   return {
-    meta: {
-      total: items.length,
-      filters: {
-        ...filters,
-        ...(dateRange
-          ? { startDate: dateRange.start, endDate: dateRange.end }
-          : {}),
-      },
-    },
+    meta: buildQueueMeta(filters, dateRange, items.length),
     items,
   };
 }
