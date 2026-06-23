@@ -9,6 +9,7 @@ import type { EvidenceItem } from "../../../src/domain/evidence/evidenceBuilder"
 import { parseIsoDate, type IsoDate } from "../../../src/domain/dates";
 
 type DrawerState = "idle" | "loading" | "loaded" | "empty" | "error";
+const MIN_LOADING_VISIBLE_MS = 300;
 
 function formatDate(value: IsoDate): string {
   return new Intl.DateTimeFormat("en-US", {
@@ -69,8 +70,10 @@ export function EvidenceDrawer({
     const openedAt = Date.now();
     const ensureLoadingVisible = async () => {
       const elapsed = Date.now() - openedAt;
-      if (elapsed < 120) {
-        await new Promise((resolve) => setTimeout(resolve, 120 - elapsed));
+      if (elapsed < MIN_LOADING_VISIBLE_MS) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, MIN_LOADING_VISIBLE_MS - elapsed),
+        );
       }
     };
 

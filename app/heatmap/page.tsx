@@ -6,40 +6,27 @@ import {
   SafeStatePanel,
 } from "../_components/SafeStatePanel";
 import { CoverageBadge, RiskBadge } from "../_components/StatusBadges";
+import {
+  bandLabel,
+  buildHeatmapPageModel,
+  requestDetailHref,
+  requestRangeHref,
+  weekRangeHref,
+  type HeatmapPageModel,
+  type HeatmapPreviewState,
+  type HeatmapWeek,
+  type SelectedHeatmapWeek,
+} from "./heatmapPageModel";
 
-import type { DemoCoverageBand } from "../../src/demo/dataset";
-import {
-  addDaysIsoDate,
-  eachDayInclusive,
-  isIsoDate,
-  parseIsoDate,
-  type IsoDate,
-} from "../../src/domain/dates";
-import { buildCalendarHeatmap } from "../../src/domain/heatmap/heatmapBuilder";
-import { buildCoverageMatrix } from "../../src/domain/coverage/coverageMatrix";
-import {
-  buildQueue,
-  queueSortKeys,
-  sortQueueItems,
-} from "../../src/domain/ptoQueue/queueService";
+import { parseIsoDate, type IsoDate } from "../../src/domain/dates";
 import {
   buildReviewHref,
-  readReviewFilterQuery,
   withDefaultQueueSort,
-  withSelectedWeekRange,
-  withWeekStartFromDateRange,
   withoutSelectedWeekRange,
-  type ReviewFilterQuery,
 } from "../../src/domain/reviewFilters";
 import { getDemoRepo } from "../../src/repos/demoRepo";
 
 type SearchParams = Record<string, string | string[] | undefined>;
-type HeatmapPreviewState = "loading" | "empty" | "error";
-
-function asString(value: string | string[] | undefined): string | undefined {
-  if (!value) return undefined;
-  return Array.isArray(value) ? value[0] : value;
-}
 
 function formatShortDay(iso: IsoDate): string {
   return new Intl.DateTimeFormat("en-US", {
@@ -49,71 +36,19 @@ function formatShortDay(iso: IsoDate): string {
   }).format(parseIsoDate(iso));
 }
 
-function bandRank(band: DemoCoverageBand): number {
-  if (band === "critical") return 3;
-  if (band === "risky") return 2;
-  if (band === "thin") return 1;
-  return 0;
-}
-
-function bandLabel(band: DemoCoverageBand): string {
-  if (band === "critical") return "Critical";
-  if (band === "risky") return "Risky";
-  if (band === "thin") return "Thin";
-  return "Healthy";
-}
-
-function weekRangeHref(
-  query: ReviewFilterQuery,
-  weekStart: IsoDate,
-  weekEnd: IsoDate,
-): string {
-  return buildReviewHref(
-    "/heatmap",
-    withSelectedWeekRange(query, weekStart, weekEnd),
+function HeatmapHeader() {
+  return (
+    <div className="max-w-3xl">
+      <h1 className="text-2xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-3xl">
+        Coverage heatmap
+      </h1>
+      <p className="mt-3 text-sm leading-6 text-zinc-700 dark:text-zinc-300">
+        A manager-friendly snapshot of upcoming coverage pressure. Select a week
+        to inspect pressure reasons, coverage matrix rows, and matching request
+        context.
+      </p>
+    </div>
   );
-}
-
-function requestRangeHref(
-  query: ReviewFilterQuery,
-  weekStart: IsoDate,
-  weekEnd: IsoDate,
-): string {
-  return buildReviewHref(
-    "/requests",
-    withDefaultQueueSort(withSelectedWeekRange(query, weekStart, weekEnd)),
-  );
-}
-
-function requestDetailHref(
-  query: ReviewFilterQuery,
-  requestId: string,
-  weekStart: IsoDate,
-  weekEnd: IsoDate,
-): string {
-  return buildReviewHref(
-    `/requests/${requestId}`,
-    withDefaultQueueSort(withSelectedWeekRange(query, weekStart, weekEnd)),
-  );
-}
-
-function getHeatmapPreviewState(
-  value: string | undefined,
-): HeatmapPreviewState | null {
-  if (value === "loading") return "loading";
-  if (value === "empty") return "empty";
-  if (value === "error") return "error";
-  return null;
-}
-
-function liveHeatmapHref(query: ReviewFilterQuery): string {
-  const liveQuery = withWeekStartFromDateRange(query);
-  const weekStart = liveQuery.weekStart;
-  if (weekStart && isIsoDate(weekStart)) {
-    return buildReviewHref("/heatmap", liveQuery);
-  }
-
-  return buildReviewHref("/heatmap", query);
 }
 
 function HeatmapStatePreview({
@@ -248,489 +183,410 @@ function HeatmapStatePreview({
   );
 }
 
-export default async function HeatmapPage({
-  searchParams,
-}: {
-  searchParams?: SearchParams | Promise<SearchParams>;
-}) {
-  const sp = await Promise.resolve(searchParams ?? {});
-  const reviewQuery = withWeekStartFromDateRange(readReviewFilterQuery(sp));
-  const weekStartRaw = reviewQuery.weekStart;
-  const previewState = getHeatmapPreviewState(asString(sp.state));
+function SelectionNotice({ message }: { message: string | null }) {
+  if (!message) return null;
 
-  if (previewState) {
-    return (
-      <div className="mx-auto w-full max-w-5xl px-6 py-10 sm:py-14">
-        <div className="max-w-3xl">
-          <h1 className="text-2xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-3xl">
-            Coverage heatmap
-          </h1>
-          <p className="mt-3 text-sm leading-6 text-zinc-700 dark:text-zinc-300">
-            A manager-friendly snapshot of upcoming coverage pressure. Select a
-            week to inspect pressure reasons, coverage matrix rows, and matching
-            request context.
-          </p>
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="mt-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/40 dark:text-amber-100"
+    >
+      {message}
+    </div>
+  );
+}
+
+function HeatmapLegend() {
+  return (
+    <section aria-label="Heatmap legend" className="mt-8">
+      <div className="rounded-xl border border-zinc-200 bg-white p-5 text-sm text-zinc-700 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-300">
+        <div className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
+          Legend
         </div>
-
-        <div className="mt-6">
-          <DemoNotice compact />
+        <div className="mt-3 flex flex-wrap gap-2">
+          <RiskBadge band="healthy" />
+          <RiskBadge band="thin" />
+          <RiskBadge band="risky" />
+          <RiskBadge band="critical" />
         </div>
-
-        <HeatmapStatePreview
-          state={previewState}
-          liveHref={liveHeatmapHref(reviewQuery)}
-          queueHref={buildReviewHref(
-            "/requests",
-            withDefaultQueueSort(withoutSelectedWeekRange(reviewQuery)),
-          )}
-        />
+        <p className="mt-3 leading-6">
+          Healthy means coverage stays above minimum. Thin means a role sits at
+          minimum. Risky means coverage drops below minimum. Critical means
+          single-person exposure or a blackout-style window.
+        </p>
       </div>
+    </section>
+  );
+}
+
+function PressureReasons({ reasons }: { reasons: string[] }) {
+  if (reasons.length === 0) {
+    return <p className="mt-1">No elevated pressure signals in this week.</p>;
+  }
+
+  return (
+    <ul className="mt-1 list-disc space-y-1 pl-5">
+      {reasons.map((reason) => (
+        <li key={reason}>{reason}</li>
+      ))}
+    </ul>
+  );
+}
+
+function WeekCard({
+  week,
+  selectedWeekStart,
+  model,
+}: {
+  week: HeatmapWeek;
+  selectedWeekStart: IsoDate;
+  model: HeatmapPageModel;
+}) {
+  const selected = week.weekStart === selectedWeekStart;
+
+  return (
+    <Link
+      href={weekRangeHref(model.reviewQuery, week.weekStart, week.weekEnd)}
+      aria-current={selected ? "page" : undefined}
+      aria-label={[
+        `Week of ${formatShortDay(week.weekStart)}.`,
+        `${bandLabel(week.worstBand)} coverage.`,
+        week.reasons.length > 0
+          ? `Pressure reasons: ${week.reasons.join("; ")}.`
+          : "No elevated pressure signals in this week.",
+      ].join(" ")}
+      className={[
+        "rounded-xl border bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-md dark:bg-zinc-900/40",
+        selected
+          ? "border-zinc-950 ring-2 ring-zinc-950 dark:border-zinc-50 dark:ring-zinc-50"
+          : "border-zinc-200 dark:border-zinc-800",
+      ].join(" ")}
+    >
+      <div className="flex items-center justify-between gap-4">
+        <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
+          Week of {formatShortDay(week.weekStart)}
+        </div>
+        <RiskBadge band={week.worstBand} />
+      </div>
+      <div className="mt-3 text-sm leading-6 text-zinc-700 dark:text-zinc-300">
+        <div className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
+          Pressure reasons
+        </div>
+        <PressureReasons reasons={week.reasons} />
+        <div className="mt-3 text-xs text-zinc-600 dark:text-zinc-400">
+          Range: {week.weekStart} to {week.weekEnd}
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+function HeatmapGrid({
+  model,
+  selected,
+}: {
+  model: HeatmapPageModel;
+  selected: SelectedHeatmapWeek;
+}) {
+  return (
+    <section aria-label="Heatmap grid" className="mt-8">
+      <div className="grid gap-4 sm:grid-cols-2">
+        {model.weeks.map((week) => (
+          <WeekCard
+            key={week.weekStart}
+            week={week}
+            selectedWeekStart={selected.weekStart}
+            model={model}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function MatchingRequestsList({
+  selected,
+  model,
+}: {
+  selected: SelectedHeatmapWeek;
+  model: HeatmapPageModel;
+}) {
+  if (selected.queueItems.length === 0) {
+    return (
+      <p className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">
+        No requests overlap this selected week in the demo set.
+      </p>
     );
   }
 
-  const repo = getDemoRepo();
-
-  const heatmap = buildCalendarHeatmap({
-    repo,
-    preset: "next-8-weeks",
-    teamId: reviewQuery.teamId,
-    roleId: reviewQuery.roleId,
-  });
-
-  const weeks: Array<{
-    weekStart: IsoDate;
-    weekEnd: IsoDate;
-    worstBand: DemoCoverageBand;
-    reasons: string[];
-  }> = [];
-
-  let cursor = heatmap.range.startDate;
-  while (cursor <= heatmap.range.endDate) {
-    const weekStart = cursor;
-    const weekEndCandidate = addDaysIsoDate(cursor, 6);
-    const weekEnd =
-      weekEndCandidate > heatmap.range.endDate
-        ? heatmap.range.endDate
-        : weekEndCandidate;
-
-    const days = eachDayInclusive(weekStart, weekEnd);
-    const cells = heatmap.cells.filter((c) => days.includes(c.date));
-
-    let worstBand: DemoCoverageBand = "healthy";
-    const reasons: string[] = [];
-    for (const c of cells) {
-      if (bandRank(c.band) > bandRank(worstBand)) worstBand = c.band;
-      for (const r of c.topPressureReasons) {
-        if (!reasons.includes(r)) reasons.push(r);
-      }
-    }
-
-    weeks.push({
-      weekStart,
-      weekEnd,
-      worstBand,
-      reasons: reasons.slice(0, 3),
-    });
-
-    cursor = addDaysIsoDate(cursor, 7);
-  }
-
-  let selectedWeekStart = heatmap.range.startDate;
-  let selectionNotice: string | null = null;
-  if (weekStartRaw) {
-    if (!isIsoDate(weekStartRaw)) {
-      selectionNotice =
-        "The selected week was not valid. Showing the first available week.";
-    } else if (
-      weekStartRaw < heatmap.range.startDate ||
-      weekStartRaw > heatmap.range.endDate
-    ) {
-      selectionNotice =
-        "The selected week was outside the demo range. Showing the first available week.";
-    } else {
-      selectedWeekStart = weekStartRaw;
-    }
-  }
-
-  const selectedWeekEndCandidate = addDaysIsoDate(selectedWeekStart, 6);
-  const selectedWeekEnd =
-    selectedWeekEndCandidate > heatmap.range.endDate
-      ? heatmap.range.endDate
-      : selectedWeekEndCandidate;
-  const selectedDays = eachDayInclusive(selectedWeekStart, selectedWeekEnd);
-  const selectedWeekCells = heatmap.cells.filter((c) =>
-    selectedDays.includes(c.date),
+  return (
+    <ul className="mt-3 space-y-3">
+      {selected.queueItems.slice(0, 3).map((item) => (
+        <li
+          key={item.id}
+          className="rounded-lg border border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950/20"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <Link
+              href={requestDetailHref(
+                model.reviewQuery,
+                item.id,
+                selected.weekStart,
+                selected.weekEnd,
+              )}
+              className="text-sm font-semibold text-zinc-950 underline underline-offset-4 hover:text-zinc-700 dark:text-zinc-50 dark:hover:text-zinc-200"
+            >
+              {item.employee.displayName} ({item.id})
+            </Link>
+            <RiskBadge
+              band={item.assessment.band}
+              score={item.assessment.score}
+            />
+          </div>
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-zinc-700 dark:text-zinc-300">
+            <span className="font-medium">{item.team.name}</span>
+            <span
+              className="text-zinc-500 dark:text-zinc-400"
+              aria-hidden="true"
+            >
+              ·
+            </span>
+            <span>{item.role.name}</span>
+            <span
+              className="text-zinc-500 dark:text-zinc-400"
+              aria-hidden="true"
+            >
+              ·
+            </span>
+            <span>{item.assessment.topReason.summary}</span>
+          </div>
+        </li>
+      ))}
+    </ul>
   );
+}
 
-  let selectedWeekBand: DemoCoverageBand = "healthy";
-  const selectedReasons: string[] = [];
-  for (const cell of selectedWeekCells) {
-    if (bandRank(cell.band) > bandRank(selectedWeekBand)) {
-      selectedWeekBand = cell.band;
-    }
-    for (const reason of cell.topPressureReasons) {
-      if (!selectedReasons.includes(reason)) selectedReasons.push(reason);
-    }
-  }
+function SelectedWeekPanel({
+  selected,
+  model,
+}: {
+  selected: SelectedHeatmapWeek;
+  model: HeatmapPageModel;
+}) {
+  return (
+    <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/40">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h2 className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
+            Selected week
+          </h2>
+          <p className="mt-1 text-sm leading-6 text-zinc-700 dark:text-zinc-300">
+            {formatShortDay(selected.weekStart)} to{" "}
+            {formatShortDay(selected.weekEnd)}
+          </p>
+        </div>
+        <RiskBadge band={selected.band} />
+      </div>
 
-  const coverageRows = buildCoverageMatrix({
-    repo,
-    range: { start: selectedWeekStart, end: selectedWeekEnd },
-    teamId: reviewQuery.teamId,
-    roleId: reviewQuery.roleId,
-  });
+      <div className="mt-4 rounded-lg border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-700 dark:border-zinc-800 dark:bg-zinc-950/30 dark:text-zinc-300">
+        <div className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
+          Pressure reasons
+        </div>
+        <PressureReasons reasons={selected.reasons} />
+      </div>
 
-  const selectedQueue = buildQueue({
-    repo,
-    filters: {
-      teamId: reviewQuery.teamId,
-      roleId: reviewQuery.roleId,
-      requestType: reviewQuery.requestType as "pto" | "training" | undefined,
-      status: reviewQuery.status as
-        | "pending"
-        | "approved"
-        | "withdrawn"
-        | undefined,
-      coverageBand: reviewQuery.coverageBand as
-        | "healthy"
-        | "thin"
-        | "risky"
-        | "critical"
-        | undefined,
-      conflictLevel: reviewQuery.conflictLevel as
-        | "none"
-        | "low"
-        | "medium"
-        | "high"
-        | undefined,
-      startDate: selectedWeekStart,
-      endDate: selectedWeekEnd,
-    },
-  });
-  const selectedQueueSort = withDefaultQueueSort(reviewQuery);
-  const selectedQueueItems = sortQueueItems(
-    selectedQueue.items,
-    queueSortKeys.includes(
-      selectedQueueSort.sort as (typeof queueSortKeys)[number],
-    )
-      ? (selectedQueueSort.sort as (typeof queueSortKeys)[number])
-      : "risk",
-    selectedQueueSort.dir === "asc" ? "asc" : "desc",
+      <div className="mt-4 flex flex-wrap gap-3">
+        <Link
+          href={requestRangeHref(
+            model.reviewQuery,
+            selected.weekStart,
+            selected.weekEnd,
+          )}
+          className="inline-flex items-center justify-center rounded-full bg-zinc-950 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
+        >
+          Open queue for this window
+        </Link>
+        <Link
+          href={buildReviewHref(
+            "/requests",
+            withDefaultQueueSort(withoutSelectedWeekRange(model.reviewQuery)),
+          )}
+          className="inline-flex items-center justify-center rounded-full border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-950 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-50 dark:hover:bg-zinc-900"
+        >
+          Open the full queue
+        </Link>
+      </div>
+
+      <div className="mt-6">
+        <div className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
+          Matching requests in this week
+        </div>
+        <MatchingRequestsList selected={selected} model={model} />
+      </div>
+    </div>
   );
+}
+
+function coverageStatusText(row: SelectedHeatmapWeek["coverageRows"][number]) {
+  if (row.singlePersonExposure) return "Single-person role exposure";
+  if (row.comparison === "below") return "Below required coverage";
+  if (row.comparison === "exact") return "At the minimum";
+  return "Above required coverage";
+}
+
+function CoverageMatrixSection({
+  selected,
+}: {
+  selected: SelectedHeatmapWeek;
+}) {
+  return (
+    <section
+      aria-label="Coverage matrix"
+      className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/40"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h2 className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
+            Coverage matrix
+          </h2>
+          <p className="mt-1 text-sm leading-6 text-zinc-700 dark:text-zinc-300">
+            Required versus available coverage for the selected week.
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-4 overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800">
+        <table
+          className="w-full border-collapse text-left text-sm"
+          aria-describedby="coverage-matrix-summary"
+        >
+          <caption className="sr-only">
+            Coverage matrix for the selected week
+          </caption>
+          <thead className="bg-zinc-50 text-xs text-zinc-600 dark:bg-zinc-950/40 dark:text-zinc-400">
+            <tr>
+              <th scope="col" className="px-3 py-2 font-medium">
+                Team
+              </th>
+              <th scope="col" className="px-3 py-2 font-medium">
+                Role
+              </th>
+              <th scope="col" className="px-3 py-2 font-medium">
+                Required
+              </th>
+              <th scope="col" className="px-3 py-2 font-medium">
+                Available
+              </th>
+              <th scope="col" className="px-3 py-2 font-medium">
+                Status
+              </th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+            {selected.coverageRows.map((row) => (
+              <tr key={`${row.teamId}-${row.roleId}`} className="align-top">
+                <td className="px-3 py-3 text-zinc-700 dark:text-zinc-300">
+                  {row.teamName}
+                </td>
+                <th
+                  scope="row"
+                  className="px-3 py-3 text-left text-zinc-700 dark:text-zinc-300"
+                >
+                  <div className="font-medium text-zinc-950 dark:text-zinc-50">
+                    {row.roleName}
+                  </div>
+                  <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                    {formatShortDay(selected.weekStart)} to{" "}
+                    {formatShortDay(selected.weekEnd)}
+                  </div>
+                </th>
+                <td className="px-3 py-3 text-zinc-700 dark:text-zinc-300">
+                  <span className="font-mono tabular-nums">{row.required}</span>
+                </td>
+                <td className="px-3 py-3 text-zinc-700 dark:text-zinc-300">
+                  <span className="font-mono tabular-nums">
+                    {row.minAvailable}
+                  </span>
+                </td>
+                <td className="px-3 py-3">
+                  <CoverageBadge
+                    comparison={row.comparison}
+                    singlePersonExposure={row.singlePersonExposure}
+                    available={row.minAvailable}
+                    required={row.required}
+                  />
+                  <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                    {coverageStatusText(row)}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p
+        id="coverage-matrix-summary"
+        className="mt-3 text-xs text-zinc-500 dark:text-zinc-400"
+      >
+        Coverage matrix rows compare required and available staffing for the
+        selected week, including above minimum, at minimum, below minimum, and
+        single-person exposure states.
+      </p>
+    </section>
+  );
+}
+
+function LiveHeatmapView({ model }: { model: HeatmapPageModel }) {
+  const selected = model.selected;
+  if (!selected) return null;
 
   return (
+    <>
+      <SelectionNotice message={model.selectionNotice} />
+      <HeatmapLegend />
+      <HeatmapGrid model={model} selected={selected} />
+      <section
+        aria-label="Selected week"
+        className="mt-10 grid gap-6 lg:grid-cols-[1.2fr_0.8fr]"
+      >
+        <SelectedWeekPanel selected={selected} model={model} />
+        <CoverageMatrixSection selected={selected} />
+      </section>
+    </>
+  );
+}
+
+function HeatmapView({ model }: { model: HeatmapPageModel }) {
+  return (
     <div className="mx-auto w-full max-w-5xl px-6 py-10 sm:py-14">
-      <div className="max-w-3xl">
-        <h1 className="text-2xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-3xl">
-          Coverage heatmap
-        </h1>
-        <p className="mt-3 text-sm leading-6 text-zinc-700 dark:text-zinc-300">
-          A manager-friendly snapshot of upcoming coverage pressure. Select a
-          week to inspect pressure reasons, coverage matrix rows, and matching
-          request context.
-        </p>
-      </div>
+      <HeatmapHeader />
 
       <div className="mt-6">
         <DemoNotice compact />
       </div>
 
-      {selectionNotice ? (
-        <div
-          role="status"
-          aria-live="polite"
-          className="mt-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/40 dark:text-amber-100"
-        >
-          {selectionNotice}
-        </div>
-      ) : null}
-
-      <section aria-label="Heatmap legend" className="mt-8">
-        <div className="rounded-xl border border-zinc-200 bg-white p-5 text-sm text-zinc-700 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-300">
-          <div className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
-            Legend
-          </div>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <RiskBadge band="healthy" />
-            <RiskBadge band="thin" />
-            <RiskBadge band="risky" />
-            <RiskBadge band="critical" />
-          </div>
-          <p className="mt-3 leading-6">
-            Healthy means coverage stays above minimum. Thin means a role sits
-            at minimum. Risky means coverage drops below minimum. Critical means
-            single-person exposure or a blackout-style window.
-          </p>
-        </div>
-      </section>
-
-      <section aria-label="Heatmap grid" className="mt-8">
-        <div className="grid gap-4 sm:grid-cols-2">
-          {weeks.map((week) => {
-            const selected = week.weekStart === selectedWeekStart;
-            return (
-              <Link
-                key={week.weekStart}
-                href={weekRangeHref(reviewQuery, week.weekStart, week.weekEnd)}
-                aria-current={selected ? "page" : undefined}
-                aria-label={[
-                  `Week of ${formatShortDay(week.weekStart)}.`,
-                  `${bandLabel(week.worstBand)} coverage.`,
-                  week.reasons.length > 0
-                    ? `Pressure reasons: ${week.reasons.join("; ")}.`
-                    : "No elevated pressure signals in this week.",
-                ].join(" ")}
-                className={[
-                  "rounded-xl border bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-md dark:bg-zinc-900/40",
-                  selected
-                    ? "border-zinc-950 ring-2 ring-zinc-950 dark:border-zinc-50 dark:ring-zinc-50"
-                    : "border-zinc-200 dark:border-zinc-800",
-                ].join(" ")}
-              >
-                <div className="flex items-center justify-between gap-4">
-                  <div className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-                    Week of {formatShortDay(week.weekStart)}
-                  </div>
-                  <RiskBadge band={week.worstBand} />
-                </div>
-                <div className="mt-3 text-sm leading-6 text-zinc-700 dark:text-zinc-300">
-                  <div className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
-                    Pressure reasons
-                  </div>
-                  {week.reasons.length === 0 ? (
-                    <p className="mt-1">
-                      No elevated pressure signals in this week.
-                    </p>
-                  ) : (
-                    <ul className="mt-1 list-disc space-y-1 pl-5">
-                      {week.reasons.map((reason) => (
-                        <li key={reason}>{reason}</li>
-                      ))}
-                    </ul>
-                  )}
-                  <div className="mt-3 text-xs text-zinc-600 dark:text-zinc-400">
-                    Range: {week.weekStart} to {week.weekEnd}
-                  </div>
-                </div>
-              </Link>
-            );
-          })}
-        </div>
-      </section>
-
-      <section
-        aria-label="Selected week"
-        className="mt-10 grid gap-6 lg:grid-cols-[1.2fr_0.8fr]"
-      >
-        <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/40">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <h2 className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-                Selected week
-              </h2>
-              <p className="mt-1 text-sm leading-6 text-zinc-700 dark:text-zinc-300">
-                {formatShortDay(selectedWeekStart)} to{" "}
-                {formatShortDay(selectedWeekEnd)}
-              </p>
-            </div>
-            <RiskBadge band={selectedWeekBand} />
-          </div>
-
-          <div className="mt-4 rounded-lg border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-700 dark:border-zinc-800 dark:bg-zinc-950/30 dark:text-zinc-300">
-            <div className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
-              Pressure reasons
-            </div>
-            {selectedReasons.length === 0 ? (
-              <p className="mt-1">No elevated pressure signals in this week.</p>
-            ) : (
-              <ul className="mt-1 list-disc space-y-1 pl-5">
-                {selectedReasons.map((reason) => (
-                  <li key={reason}>{reason}</li>
-                ))}
-              </ul>
-            )}
-          </div>
-
-          <div className="mt-4 flex flex-wrap gap-3">
-            <Link
-              href={requestRangeHref(
-                reviewQuery,
-                selectedWeekStart,
-                selectedWeekEnd,
-              )}
-              className="inline-flex items-center justify-center rounded-full bg-zinc-950 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
-            >
-              Open queue for this window
-            </Link>
-            <Link
-              href={buildReviewHref(
-                "/requests",
-                withDefaultQueueSort(withoutSelectedWeekRange(reviewQuery)),
-              )}
-              className="inline-flex items-center justify-center rounded-full border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-950 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-50 dark:hover:bg-zinc-900"
-            >
-              Open the full queue
-            </Link>
-          </div>
-
-          <div className="mt-6">
-            <div className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
-              Matching requests in this week
-            </div>
-            {selectedQueueItems.length === 0 ? (
-              <p className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">
-                No requests overlap this selected week in the demo set.
-              </p>
-            ) : (
-              <ul className="mt-3 space-y-3">
-                {selectedQueueItems.slice(0, 3).map((item) => (
-                  <li
-                    key={item.id}
-                    className="rounded-lg border border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950/20"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <Link
-                        href={requestDetailHref(
-                          reviewQuery,
-                          item.id,
-                          selectedWeekStart,
-                          selectedWeekEnd,
-                        )}
-                        className="text-sm font-semibold text-zinc-950 underline underline-offset-4 hover:text-zinc-700 dark:text-zinc-50 dark:hover:text-zinc-200"
-                      >
-                        {item.employee.displayName} ({item.id})
-                      </Link>
-                      <RiskBadge
-                        band={item.assessment.band}
-                        score={item.assessment.score}
-                      />
-                    </div>
-                    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-zinc-700 dark:text-zinc-300">
-                      <span className="font-medium">{item.team.name}</span>
-                      <span
-                        className="text-zinc-500 dark:text-zinc-400"
-                        aria-hidden="true"
-                      >
-                        ·
-                      </span>
-                      <span>{item.role.name}</span>
-                      <span
-                        className="text-zinc-500 dark:text-zinc-400"
-                        aria-hidden="true"
-                      >
-                        ·
-                      </span>
-                      <span>{item.assessment.topReason.summary}</span>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </div>
-
-        <section
-          aria-label="Coverage matrix"
-          className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/40"
-        >
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <h2 className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-                Coverage matrix
-              </h2>
-              <p className="mt-1 text-sm leading-6 text-zinc-700 dark:text-zinc-300">
-                Required versus available coverage for the selected week.
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-4 overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800">
-            <table
-              className="w-full border-collapse text-left text-sm"
-              aria-describedby="coverage-matrix-summary"
-            >
-              <caption className="sr-only">
-                Coverage matrix for the selected week
-              </caption>
-              <thead className="bg-zinc-50 text-xs text-zinc-600 dark:bg-zinc-950/40 dark:text-zinc-400">
-                <tr>
-                  <th scope="col" className="px-3 py-2 font-medium">
-                    Team
-                  </th>
-                  <th scope="col" className="px-3 py-2 font-medium">
-                    Role
-                  </th>
-                  <th scope="col" className="px-3 py-2 font-medium">
-                    Required
-                  </th>
-                  <th scope="col" className="px-3 py-2 font-medium">
-                    Available
-                  </th>
-                  <th scope="col" className="px-3 py-2 font-medium">
-                    Status
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                {coverageRows.map((row) => (
-                  <tr key={`${row.teamId}-${row.roleId}`} className="align-top">
-                    <td className="px-3 py-3 text-zinc-700 dark:text-zinc-300">
-                      {row.teamName}
-                    </td>
-                    <th
-                      scope="row"
-                      className="px-3 py-3 text-left text-zinc-700 dark:text-zinc-300"
-                    >
-                      <div className="font-medium text-zinc-950 dark:text-zinc-50">
-                        {row.roleName}
-                      </div>
-                      <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                        {formatShortDay(selectedWeekStart)} to{" "}
-                        {formatShortDay(selectedWeekEnd)}
-                      </div>
-                    </th>
-                    <td className="px-3 py-3 text-zinc-700 dark:text-zinc-300">
-                      <span className="font-mono tabular-nums">
-                        {row.required}
-                      </span>
-                    </td>
-                    <td className="px-3 py-3 text-zinc-700 dark:text-zinc-300">
-                      <span className="font-mono tabular-nums">
-                        {row.minAvailable}
-                      </span>
-                    </td>
-                    <td className="px-3 py-3">
-                      <CoverageBadge
-                        comparison={row.comparison}
-                        singlePersonExposure={row.singlePersonExposure}
-                        available={row.minAvailable}
-                        required={row.required}
-                      />
-                      <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                        {row.singlePersonExposure
-                          ? "Single-person role exposure"
-                          : row.comparison === "below"
-                            ? "Below required coverage"
-                            : row.comparison === "exact"
-                              ? "At the minimum"
-                              : "Above required coverage"}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <p
-            id="coverage-matrix-summary"
-            className="mt-3 text-xs text-zinc-500 dark:text-zinc-400"
-          >
-            Coverage matrix rows compare required and available staffing for the
-            selected week, including above minimum, at minimum, below minimum,
-            and single-person exposure states.
-          </p>
-        </section>
-      </section>
+      {model.previewState ? (
+        <HeatmapStatePreview
+          state={model.previewState}
+          liveHref={model.liveHref}
+          queueHref={model.queueHref}
+        />
+      ) : (
+        <LiveHeatmapView model={model} />
+      )}
     </div>
   );
+}
+
+export default async function HeatmapPage({
+  searchParams,
+}: {
+  searchParams?: SearchParams | Promise<SearchParams>;
+}) {
+  const repo = getDemoRepo();
+  const sp = await Promise.resolve(searchParams ?? {});
+  const model = buildHeatmapPageModel(repo, sp);
+
+  return <HeatmapView model={model} />;
 }
