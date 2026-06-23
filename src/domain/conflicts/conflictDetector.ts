@@ -64,6 +64,177 @@ function maxConflictLevel(levels: ConflictLevel[]): ConflictLevel {
   return levels.reduce((acc, v) => (order[v] > order[acc] ? v : acc), "none");
 }
 
+type ConflictCollection = {
+  items: ConflictItem[];
+  levels: ConflictLevel[];
+};
+
+function emptyConflictCollection(): ConflictCollection {
+  return { items: [], levels: [] };
+}
+
+function collectCriticalWindowConflicts(args: {
+  repo: DemoRepo;
+  teamId: string;
+  range: { start: IsoDate; end: IsoDate };
+}): ConflictCollection {
+  const { repo, teamId, range } = args;
+  const result = emptyConflictCollection();
+
+  for (const window of repo.criticalWindows) {
+    if (window.teamId !== teamId) continue;
+    if (!overlaps(range, { start: window.startDate, end: window.endDate }))
+      continue;
+
+    result.items.push({
+      kind: "critical_window",
+      windowId: window.id,
+      windowKind: window.kind,
+      title: window.title,
+      startDate: window.startDate,
+      endDate: window.endDate,
+      description: window.description,
+    });
+    result.levels.push(window.kind === "blackout" ? "high" : "medium");
+  }
+
+  return result;
+}
+
+function employeeMatchesRole(
+  repo: DemoRepo,
+  employeeId: string,
+  teamId: string,
+  roleId: string,
+) {
+  const employee = repo.employees.find((e) => e.id === employeeId);
+  if (!employee) return null;
+  if (employee.teamId !== teamId || employee.roleId !== roleId) return null;
+  return employee;
+}
+
+function roleNameFor(repo: DemoRepo, roleId: string) {
+  return repo.roles.find((role) => role.id === roleId)?.name ?? roleId;
+}
+
+function collectExistingAbsenceConflicts(args: {
+  repo: DemoRepo;
+  teamId: string;
+  roleId: string;
+  range: { start: IsoDate; end: IsoDate };
+}): ConflictCollection {
+  const { repo, teamId, roleId, range } = args;
+  const roleName = roleNameFor(repo, roleId);
+  const result = emptyConflictCollection();
+
+  for (const absence of repo.existingAbsences) {
+    const employee = employeeMatchesRole(
+      repo,
+      absence.employeeId,
+      teamId,
+      roleId,
+    );
+    if (!employee) continue;
+    if (!overlaps(range, { start: absence.startDate, end: absence.endDate }))
+      continue;
+
+    result.items.push({
+      kind: "overlapping_absence",
+      absenceId: absence.id,
+      employeeId: employee.id,
+      employeeDisplayName: employee.displayName,
+      roleId,
+      roleName,
+      startDate: absence.startDate,
+      endDate: absence.endDate,
+      note: absence.note,
+    });
+    result.levels.push("high");
+  }
+
+  return result;
+}
+
+function collectOverlappingRequestConflicts(args: {
+  repo: DemoRepo;
+  requestId: string;
+  teamId: string;
+  roleId: string;
+  range: { start: IsoDate; end: IsoDate };
+}): ConflictCollection {
+  const { repo, requestId, teamId, roleId, range } = args;
+  const roleName = roleNameFor(repo, roleId);
+  const result = emptyConflictCollection();
+
+  for (const request of repo.ptoRequests) {
+    if (request.id === requestId) continue;
+    const employee = employeeMatchesRole(
+      repo,
+      request.employeeId,
+      teamId,
+      roleId,
+    );
+    if (!employee) continue;
+    if (
+      !overlaps(range, {
+        start: request.requestedStartDate,
+        end: request.requestedEndDate,
+      })
+    )
+      continue;
+
+    result.items.push({
+      kind: "overlapping_request",
+      requestId: request.id,
+      employeeId: employee.id,
+      employeeDisplayName: employee.displayName,
+      roleId,
+      roleName,
+      startDate: request.requestedStartDate,
+      endDate: request.requestedEndDate,
+      status: request.status,
+    });
+    result.levels.push(request.status === "approved" ? "high" : "medium");
+  }
+
+  return result;
+}
+
+function collectShortNoticeConflict(
+  submittedAtIso: string,
+  range: { start: IsoDate; end: IsoDate },
+): ConflictCollection {
+  const submittedDate = submittedAtIso.slice(0, 10) as IsoDate;
+  const leadDays = diffDaysIsoDate(submittedDate, range.start);
+  if (leadDays < 0 || leadDays >= 7) return emptyConflictCollection();
+
+  return {
+    items: [
+      {
+        kind: "short_notice",
+        leadDays,
+        note: "Short notice can make coverage handoffs harder to staff.",
+      },
+    ],
+    levels: ["low"],
+  };
+}
+
+function combineConflictCollections(
+  collections: ConflictCollection[],
+): ConflictAssessment {
+  const items = collections.flatMap((collection) => collection.items);
+  const levels = [
+    "none",
+    ...collections.flatMap((collection) => collection.levels),
+  ];
+
+  return {
+    level: maxConflictLevel(levels as ConflictLevel[]),
+    items,
+  };
+}
+
 export function detectConflictsForRequest(args: {
   repo: DemoRepo;
   requestId: string;
@@ -74,95 +245,16 @@ export function detectConflictsForRequest(args: {
 }): ConflictAssessment {
   const { repo, requestId, teamId, roleId, range, submittedAtIso } = args;
 
-  const items: ConflictItem[] = [];
-  const levels: ConflictLevel[] = ["none"];
-
-  for (const w of repo.criticalWindows) {
-    if (w.teamId !== teamId) continue;
-    if (
-      overlaps(range, {
-        start: w.startDate,
-        end: w.endDate,
-      })
-    ) {
-      items.push({
-        kind: "critical_window",
-        windowId: w.id,
-        windowKind: w.kind,
-        title: w.title,
-        startDate: w.startDate,
-        endDate: w.endDate,
-        description: w.description,
-      });
-      levels.push(w.kind === "blackout" ? "high" : "medium");
-    }
-  }
-
-  const roleName = repo.roles.find((r) => r.id === roleId)?.name ?? roleId;
-
-  for (const a of repo.existingAbsences) {
-    const emp = repo.employees.find((e) => e.id === a.employeeId);
-    if (!emp) continue;
-    if (emp.teamId !== teamId) continue;
-    if (emp.roleId !== roleId) continue;
-    if (!overlaps(range, { start: a.startDate, end: a.endDate })) continue;
-
-    items.push({
-      kind: "overlapping_absence",
-      absenceId: a.id,
-      employeeId: emp.id,
-      employeeDisplayName: emp.displayName,
+  return combineConflictCollections([
+    collectCriticalWindowConflicts({ repo, teamId, range }),
+    collectExistingAbsenceConflicts({ repo, teamId, roleId, range }),
+    collectOverlappingRequestConflicts({
+      repo,
+      requestId,
+      teamId,
       roleId,
-      roleName,
-      startDate: a.startDate,
-      endDate: a.endDate,
-      note: a.note,
-    });
-    levels.push("high");
-  }
-
-  for (const r of repo.ptoRequests) {
-    if (r.id === requestId) continue;
-    const emp = repo.employees.find((e) => e.id === r.employeeId);
-    if (!emp) continue;
-    if (emp.teamId !== teamId) continue;
-    if (emp.roleId !== roleId) continue;
-    if (
-      !overlaps(range, {
-        start: r.requestedStartDate,
-        end: r.requestedEndDate,
-      })
-    )
-      continue;
-
-    items.push({
-      kind: "overlapping_request",
-      requestId: r.id,
-      employeeId: emp.id,
-      employeeDisplayName: emp.displayName,
-      roleId,
-      roleName,
-      startDate: r.requestedStartDate,
-      endDate: r.requestedEndDate,
-      status: r.status,
-    });
-    levels.push(r.status === "approved" ? "high" : "medium");
-  }
-
-  // Lead time between submission and requested start. Keep it as a soft manager-signal.
-  const submittedDate = submittedAtIso.slice(0, 10) as IsoDate;
-  const leadDays = diffDaysIsoDate(submittedDate, range.start);
-  if (leadDays >= 0 && leadDays < 7) {
-    items.push({
-      kind: "short_notice",
-      leadDays,
-      note: "Short notice can make coverage handoffs harder to staff.",
-    });
-    levels.push("low");
-  }
-
-  return {
-    level: maxConflictLevel(levels),
-    items,
-  };
+      range,
+    }),
+    collectShortNoticeConflict(submittedAtIso, range),
+  ]);
 }
