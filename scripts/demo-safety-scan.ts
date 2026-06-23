@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { execSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
 
 type Pattern = {
   id: string;
@@ -131,13 +132,25 @@ function isTextFile(filePath: string) {
   return TEXT_FILE_EXTENSIONS.has(path.extname(filePath).toLowerCase());
 }
 
-function safeReadText(filePath: string) {
+export function safeReadText(filePath: string) {
+  let fileDescriptor: number | null = null;
+
   try {
-    const stat = fs.statSync(filePath);
+    fileDescriptor = fs.openSync(filePath, "r");
+    const stat = fs.fstatSync(fileDescriptor);
     if (!stat.isFile() || stat.size > MAX_FILE_BYTES) return null;
-    return fs.readFileSync(filePath, "utf8");
+
+    return fs.readFileSync(fileDescriptor, "utf8");
   } catch {
     return null;
+  } finally {
+    if (fileDescriptor !== null) {
+      try {
+        fs.closeSync(fileDescriptor);
+      } catch {
+        // The scan already treats unreadable files as skipped.
+      }
+    }
   }
 }
 
@@ -436,9 +449,18 @@ async function main() {
   process.exitCode = 1;
 }
 
-main().catch((error: unknown) => {
-  const message =
-    error instanceof Error ? error.message : "demo-safety-scan failed.";
-  console.error(message);
-  process.exitCode = 1;
-});
+function isEntrypoint() {
+  const scriptPath = process.argv[1];
+  if (!scriptPath) return false;
+
+  return import.meta.url === pathToFileURL(path.resolve(scriptPath)).href;
+}
+
+if (isEntrypoint()) {
+  main().catch((error: unknown) => {
+    const message =
+      error instanceof Error ? error.message : "demo-safety-scan failed.";
+    console.error(message);
+    process.exitCode = 1;
+  });
+}
