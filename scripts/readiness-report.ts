@@ -21,6 +21,7 @@ const DEFAULT_BRANCH = "master";
 const REQUIRED_LOCAL_SCRIPTS = [
   "format:check",
   "lint",
+  "complexity:check",
   "typecheck",
   "test:coverage",
   "build",
@@ -38,6 +39,7 @@ const CI_WORKFLOW_MARKERS = [
   "npm ci",
   "npm run format:check",
   "npm run lint",
+  "npm run complexity:check",
   "npm run typecheck",
   "npm run test:coverage",
   "npm run build",
@@ -425,6 +427,7 @@ function computeReadinessLevel(sections: Section[]): number {
     "Playwright smoke flexibility",
     "Safety scan coverage",
     "SQL supportability gate",
+    "Complexity gate",
   ]);
 
   const hasAllLevelFourRequirements = sections.every((section) => {
@@ -641,6 +644,70 @@ function buildSupportabilitySections() {
   ];
 }
 
+function packageScriptIncludes(scriptName: string, markers: string[]) {
+  const scriptInventory = readPackageJsonScripts();
+  if (!scriptInventory.ok) return [scriptInventory.reason];
+
+  const script = scriptInventory.scripts[scriptName];
+  if (!script) return [`package.json missing script: ${scriptName}`];
+  return markers
+    .filter((marker) => !script.includes(marker))
+    .map((marker) => `${scriptName} missing marker: ${marker}`);
+}
+
+function workflowIncludes(filePath: string, marker: string) {
+  if (!exists(filePath)) return [`Missing: ${filePath}`];
+  if (readText(filePath).includes(marker)) return [];
+  return [`${filePath} missing marker: ${marker}`];
+}
+
+function complexityGateFailureLines(
+  failures: string[],
+  runResult: SafeRunResult,
+) {
+  const lines = ["- Complexity gate failures:"];
+  lines.push(...failures.map((failure) => `  - ${failure}`));
+  if (!runResult.ok) {
+    lines.push("  - npm run complexity:check failed");
+    if (runResult.stderr.trim())
+      lines.push(`  - stderr: ${runResult.stderr.trim()}`);
+    if (runResult.stdout.trim())
+      lines.push(`  - stdout: ${runResult.stdout.trim()}`);
+  }
+  return lines;
+}
+
+function buildComplexityGateSection() {
+  const failures = [
+    ...packageScriptIncludes("complexity:check", [
+      "eslint",
+      "complexity",
+      "app/**/*.{ts,tsx}",
+      "src/**/*.ts",
+      "scripts/**/*.ts",
+      "10",
+    ]),
+    ...workflowIncludes(".github/workflows/ci.yml", "npm run complexity:check"),
+  ];
+  const runResult = safeRun("npm run complexity:check");
+
+  if (failures.length === 0 && runResult.ok) {
+    return section("Complexity gate", "PASS", [
+      "- package.json includes npm run complexity:check",
+      "- Scope: app/**/*.{ts,tsx}, src/**/*.ts, scripts/**/*.ts",
+      "- Max complexity: 10",
+      "- .github/workflows/ci.yml runs npm run complexity:check",
+      "- npm run complexity:check passed",
+    ]);
+  }
+
+  return section(
+    "Complexity gate",
+    "FAIL",
+    complexityGateFailureLines(failures, runResult),
+  );
+}
+
 function buildDependencyAuditSection() {
   const audit = safeRun("npm audit --json");
   const auditSection = buildAuditSection(audit);
@@ -673,6 +740,7 @@ async function main() {
     ...buildEnvironmentAndQaSections(),
     buildPlaywrightSmokeSection(),
     ...buildSupportabilitySections(),
+    buildComplexityGateSection(),
     buildDependencyAuditSection(),
   ];
 

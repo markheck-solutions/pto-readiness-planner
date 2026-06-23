@@ -148,6 +148,61 @@ function checkQaSmokeWiring(): CheckResult[] {
   return results;
 }
 
+function checkComplexityGateWiring(): CheckResult[] {
+  const results: CheckResult[] = [];
+
+  if (!exists("package.json")) {
+    results.push({ ok: false, reason: "Missing: package.json" });
+    return results;
+  }
+
+  try {
+    const packageJson = JSON.parse(readText("package.json")) as {
+      scripts?: Record<string, string>;
+    };
+    const script = packageJson.scripts?.["complexity:check"];
+    const requiredMarkers = [
+      "eslint",
+      "complexity",
+      "app/**/*.{ts,tsx}",
+      "src/**/*.ts",
+      "scripts/**/*.ts",
+    ];
+
+    if (!script) {
+      results.push({
+        ok: false,
+        reason: "package.json missing script: complexity:check",
+      });
+    } else {
+      for (const marker of requiredMarkers) {
+        if (!script.includes(marker)) {
+          results.push({
+            ok: false,
+            reason: `complexity:check missing marker: ${marker}`,
+          });
+        }
+      }
+    }
+  } catch (error: unknown) {
+    const message =
+      error instanceof Error ? error.message : "Failed to parse package.json";
+    results.push({ ok: false, reason: message });
+  }
+
+  const ciWorkflow = ".github/workflows/ci.yml";
+  if (!exists(ciWorkflow)) {
+    results.push({ ok: false, reason: `Missing: ${ciWorkflow}` });
+  } else if (!readText(ciWorkflow).includes("npm run complexity:check")) {
+    results.push({
+      ok: false,
+      reason: "ci.yml missing npm run complexity:check",
+    });
+  }
+
+  return results;
+}
+
 function printHeader(title: string) {
   console.log("");
   console.log("=".repeat(80));
@@ -197,8 +252,13 @@ async function main() {
   all.push(...qaSmoke);
   const qaSmokeOk = summarize(qaSmoke);
 
+  printHeader("Complexity gate wiring");
+  const complexity = checkComplexityGateWiring();
+  all.push(...complexity);
+  const complexityOk = summarize(complexity);
+
   printHeader("Result");
-  if (npmOnlyOk && ignoresOk && artifactsOk && qaSmokeOk) {
+  if (npmOnlyOk && ignoresOk && artifactsOk && qaSmokeOk && complexityOk) {
     console.log("PASS: quality gates satisfied.");
     return;
   }
