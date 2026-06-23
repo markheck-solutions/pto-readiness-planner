@@ -17,6 +17,11 @@ type Finding = {
   match?: string;
 };
 
+type FileScanResult = {
+  count: number;
+  findings: Finding[];
+};
+
 const NO_EM_DASH_REGEX = /[\u2013\u2014\u2015]/;
 const MAX_FILE_BYTES = 2_000_000;
 const DEFAULT_COMMIT_COUNT = 50;
@@ -165,35 +170,48 @@ function normalizePath(filePath: string) {
   return filePath.replace(/\\/g, "/");
 }
 
+function readDirectoryEntries(directoryPath: string) {
+  try {
+    return fs.readdirSync(directoryPath, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+}
+
+function shouldSkipScanDirectory(directoryName: string) {
+  return directoryName === "node_modules" || directoryName === ".git";
+}
+
+function collectWalkEntry(
+  currentPath: string,
+  entry: fs.Dirent,
+  pendingDirectories: string[],
+  resultFiles: string[],
+) {
+  const fullPath = path.join(currentPath, entry.name);
+
+  if (entry.isDirectory()) {
+    if (shouldSkipScanDirectory(entry.name)) return;
+    pendingDirectories.push(fullPath);
+    return;
+  }
+
+  if (entry.isFile()) {
+    resultFiles.push(fullPath);
+  }
+}
+
 function walkFiles(rootPath: string, opts?: { maxFiles?: number }) {
   const limit = opts?.maxFiles ?? 60_000;
   const results: string[] = [];
   const pending = [rootPath];
 
   while (pending.length > 0 && results.length < limit) {
-    const current = pending.pop();
-    if (!current) continue;
-
-    let entries: fs.Dirent[];
-    try {
-      entries = fs.readdirSync(current, { withFileTypes: true });
-    } catch {
-      continue;
-    }
+    const current = pending.pop() as string;
+    const entries = readDirectoryEntries(current);
 
     for (const entry of entries) {
-      const fullPath = path.join(current, entry.name);
-
-      if (entry.isDirectory()) {
-        if (entry.name === "node_modules" || entry.name === ".git") continue;
-        pending.push(fullPath);
-        continue;
-      }
-
-      if (entry.isFile()) {
-        results.push(fullPath);
-      }
-
+      collectWalkEntry(current, entry, pending, results);
       if (results.length >= limit) break;
     }
   }
@@ -308,16 +326,13 @@ function printFinding(finding: Finding) {
   }
 }
 
-async function main() {
-  const startedAt = new Date().toISOString();
-  const repoRoot = process.cwd();
-
+function printScanStart(startedAt: string, repoRoot: string) {
   printHeader("Demo safety scan");
   console.log(`Started: ${startedAt}`);
   console.log(`Repo: ${repoRoot}`);
+}
 
-  const findings: Finding[] = [];
-
+function scanTrackedEnvFiles(findings: Finding[]) {
   printHeader("Tracked env file hygiene");
   const trackedFiles = listTrackedFiles();
   const trackedEnvFiles = trackedFiles
@@ -338,102 +353,139 @@ async function main() {
   }
 
   console.log(`Tracked env-like files: ${trackedEnvFiles.length}`);
+}
 
+function collectFileFindings(
+  scope: string,
+  repoRoot: string,
+  filePath: string,
+  includeUnicodeDash: boolean,
+) {
+  const text = safeReadText(filePath);
+  if (text === null) return [];
+
+  const relativePath = normalizePath(path.relative(repoRoot, filePath));
+  const patternFindings = collectPatternFindings(
+    scope,
+    relativePath,
+    text,
+    SECRET_PATTERNS,
+  );
+
+  if (!includeUnicodeDash) return patternFindings;
+  return [
+    ...collectUnicodeDashFinding(scope, relativePath, text),
+    ...patternFindings,
+  ];
+}
+
+function collectRepoFileScan(repoRoot: string): FileScanResult {
+  const files = collectRepoFiles(repoRoot);
+  const findings = files.flatMap((filePath) =>
+    collectFileFindings("repo_file", repoRoot, filePath, true),
+  );
+
+  return { count: files.length, findings };
+}
+
+function scanRepoFiles(repoRoot: string, findings: Finding[]) {
   printHeader("Scan: source, docs, tests, scripts, skills, and public assets");
   console.log(`Repository roots: ${REPO_SCAN_ROOTS.join(", ")}`);
   console.log(`Review surfaces: ${REVIEW_SURFACES.join(", ")}`);
-  const repoFiles = collectRepoFiles(repoRoot);
+  const scan = collectRepoFileScan(repoRoot);
+  findings.push(...scan.findings);
+  console.log(`Scanned repo files: ${scan.count}`);
+}
 
-  for (const filePath of repoFiles) {
-    const text = safeReadText(filePath);
-    if (text === null) continue;
+function collectOptionalFileScan(
+  repoRoot: string,
+  scope: string,
+  roots: string[],
+): FileScanResult {
+  const files = collectOptionalFiles(repoRoot, roots);
+  const findings = files.flatMap((filePath) =>
+    collectFileFindings(scope, repoRoot, filePath, false),
+  );
 
-    const relativePath = normalizePath(path.relative(repoRoot, filePath));
-    findings.push(
-      ...collectUnicodeDashFinding("repo_file", relativePath, text),
-    );
-    findings.push(
-      ...collectPatternFindings(
-        "repo_file",
-        relativePath,
-        text,
-        SECRET_PATTERNS,
-      ),
-    );
-  }
+  return { count: files.length, findings };
+}
 
-  console.log(`Scanned repo files: ${repoFiles.length}`);
-
+function scanBuildAssets(repoRoot: string, findings: Finding[]) {
   printHeader("Scan: generated build assets");
   console.log(`Build roots: ${BUILD_SCAN_ROOTS.join(", ")}`);
-  const buildFiles = collectOptionalFiles(repoRoot, BUILD_SCAN_ROOTS);
-  for (const filePath of buildFiles) {
-    const text = safeReadText(filePath);
-    if (text === null) continue;
+  const scan = collectOptionalFileScan(
+    repoRoot,
+    "build_asset",
+    BUILD_SCAN_ROOTS,
+  );
+  findings.push(...scan.findings);
+  console.log(`Scanned build asset files: ${scan.count}`);
+}
 
-    const relativePath = normalizePath(path.relative(repoRoot, filePath));
-    findings.push(
-      ...collectPatternFindings(
-        "build_asset",
-        relativePath,
-        text,
-        SECRET_PATTERNS,
-      ),
-    );
-  }
-  console.log(`Scanned build asset files: ${buildFiles.length}`);
-
+function scanArtifactFiles(repoRoot: string, findings: Finding[]) {
   printHeader("Scan: validation artifacts");
   console.log(`Artifact roots: ${ARTIFACT_SCAN_ROOTS.join(", ")}`);
-  const artifactFiles = collectOptionalFiles(repoRoot, ARTIFACT_SCAN_ROOTS);
-  for (const filePath of artifactFiles) {
-    const text = safeReadText(filePath);
-    if (text === null) continue;
+  const scan = collectOptionalFileScan(
+    repoRoot,
+    "artifact_file",
+    ARTIFACT_SCAN_ROOTS,
+  );
+  findings.push(...scan.findings);
+  console.log(`Scanned artifact files: ${scan.count}`);
+}
 
-    const relativePath = normalizePath(path.relative(repoRoot, filePath));
-    findings.push(
-      ...collectPatternFindings(
-        "artifact_file",
-        relativePath,
-        text,
-        SECRET_PATTERNS,
-      ),
-    );
-  }
-  console.log(`Scanned artifact files: ${artifactFiles.length}`);
+function readConfiguredCommitCount() {
+  const rawCount = process.env.DEMO_SAFETY_COMMIT_COUNT ?? DEFAULT_COMMIT_COUNT;
+  return Number(rawCount) || DEFAULT_COMMIT_COUNT;
+}
 
-  printHeader("Scan: recent commit messages");
-  const commitCount =
-    Number(process.env.DEMO_SAFETY_COMMIT_COUNT ?? `${DEFAULT_COMMIT_COUNT}`) ||
-    DEFAULT_COMMIT_COUNT;
+function collectCommitMessageFindings(commitCount: number) {
   const gitLogResult = readCommitMessages(commitCount);
 
-  if (gitLogResult.ok) {
-    findings.push(
+  if (!gitLogResult.ok) {
+    return {
+      scanned: false,
+      findings: [
+        {
+          scope: "commit_messages",
+          target: `last_${commitCount}_commits`,
+          patternId: "git_log_unavailable",
+          detail: `Could not scan commit messages: ${gitLogResult.error}`,
+        },
+      ] satisfies Finding[],
+    };
+  }
+
+  return {
+    scanned: true,
+    findings: [
       ...collectUnicodeDashFinding(
         "commit_messages",
         `last_${commitCount}_commits`,
         gitLogResult.stdout,
       ),
-    );
-    findings.push(
       ...collectPatternFindings(
         "commit_messages",
         `last_${commitCount}_commits`,
         gitLogResult.stdout,
         SECRET_PATTERNS,
       ),
-    );
-    console.log(`Scanned commit messages: ${commitCount}`);
-  } else {
-    findings.push({
-      scope: "commit_messages",
-      target: `last_${commitCount}_commits`,
-      patternId: "git_log_unavailable",
-      detail: `Could not scan commit messages: ${gitLogResult.error}`,
-    });
-  }
+    ],
+  };
+}
 
+function scanCommitMessages(findings: Finding[]) {
+  printHeader("Scan: recent commit messages");
+  const commitCount = readConfiguredCommitCount();
+  const scan = collectCommitMessageFindings(commitCount);
+
+  findings.push(...scan.findings);
+  if (scan.scanned) {
+    console.log(`Scanned commit messages: ${commitCount}`);
+  }
+}
+
+function printScanResult(findings: Finding[]) {
   printHeader("Result");
   if (findings.length === 0) {
     console.log(
@@ -447,6 +499,20 @@ async function main() {
     printFinding(finding);
   }
   process.exitCode = 1;
+}
+
+async function main() {
+  const startedAt = new Date().toISOString();
+  const repoRoot = process.cwd();
+  const findings: Finding[] = [];
+
+  printScanStart(startedAt, repoRoot);
+  scanTrackedEnvFiles(findings);
+  scanRepoFiles(repoRoot, findings);
+  scanBuildAssets(repoRoot, findings);
+  scanArtifactFiles(repoRoot, findings);
+  scanCommitMessages(findings);
+  printScanResult(findings);
 }
 
 function isEntrypoint() {
