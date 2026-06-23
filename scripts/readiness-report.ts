@@ -50,6 +50,24 @@ const CI_WORKFLOW_MARKERS = [
   "npm run readiness-report",
 ];
 
+const WIKI_WORKFLOW_MARKERS = [
+  "workflow_dispatch",
+  "master",
+  "contents: write",
+  "fetch-depth: 0",
+  "FACTORY_API_KEY",
+  "GH_TOKEN",
+  "Factory-AI/factory-plugins",
+  "core@factory-plugins",
+  "npm ci",
+  "/wiki",
+];
+
+const UNSAFE_FACTORY_INSTALLERS = [
+  "curl -fsSL https://app.factory.ai/cli | sh",
+  "wget -qO- https://app.factory.ai/cli | sh",
+];
+
 function exists(p: string) {
   try {
     fs.accessSync(p, fs.constants.F_OK);
@@ -170,6 +188,60 @@ function checkWorkflowMarkers(
   };
 }
 
+function hasAuditableFactoryInstallPath(text: string) {
+  return (
+    text.includes("@factory/cli@") ||
+    /Factory-AI\/droid-action@[0-9a-f]{7,40}/i.test(text) ||
+    text.includes("scripts/install-factory-droid") ||
+    text.includes(".github/vendor/factory-droid")
+  );
+}
+
+function buildWikiWorkflowPassLines(filePath: string) {
+  return [
+    `- ${filePath} includes expected workflow markers`,
+    "- Auditable Factory Droid install path detected",
+    "- No remote pipe-to-shell installer pattern detected",
+  ];
+}
+
+function addSeparatedLines(lines: string[], heading: string, values: string[]) {
+  if (values.length === 0) return;
+  if (lines.length > 0) lines.push("");
+  lines.push(heading);
+  lines.push(...values.map((value) => `  - ${value}`));
+}
+
+function buildWikiWorkflowFailureLines(
+  filePath: string,
+  missing: string[],
+  riskyPatterns: string[],
+  hasAuditableInstallPath: boolean,
+) {
+  const lines: string[] = [];
+
+  addSeparatedLines(
+    lines,
+    `- ${filePath} is missing expected markers:`,
+    missing,
+  );
+  addSeparatedLines(
+    lines,
+    "- Unsafe remote installer patterns detected:",
+    riskyPatterns,
+  );
+
+  if (!hasAuditableInstallPath) {
+    if (lines.length > 0) lines.push("");
+    lines.push("- No pinned or vendored Factory Droid install path detected.");
+    lines.push(
+      "  - Expected a pinned npm package, pinned GitHub Action ref, or vendored installer path.",
+    );
+  }
+
+  return lines;
+}
+
 function checkWikiWorkflowGate(): {
   status: SectionStatus;
   lines: string[];
@@ -183,28 +255,13 @@ function checkWikiWorkflowGate(): {
   }
 
   const text = readText(filePath);
-  const requiredSubstrings = [
-    "workflow_dispatch",
-    "master",
-    "contents: write",
-    "fetch-depth: 0",
-    "FACTORY_API_KEY",
-    "GH_TOKEN",
-    "Factory-AI/factory-plugins",
-    "core@factory-plugins",
-    "npm ci",
-    "/wiki",
-  ];
-  const missing = requiredSubstrings.filter((marker) => !text.includes(marker));
-  const riskyPatterns = [
-    "curl -fsSL https://app.factory.ai/cli | sh",
-    "wget -qO- https://app.factory.ai/cli | sh",
-  ].filter((pattern) => text.includes(pattern));
-  const hasAuditableInstallPath =
-    text.includes("@factory/cli@") ||
-    /Factory-AI\/droid-action@[0-9a-f]{7,40}/i.test(text) ||
-    text.includes("scripts/install-factory-droid") ||
-    text.includes(".github/vendor/factory-droid");
+  const missing = WIKI_WORKFLOW_MARKERS.filter(
+    (marker) => !text.includes(marker),
+  );
+  const riskyPatterns = UNSAFE_FACTORY_INSTALLERS.filter((pattern) =>
+    text.includes(pattern),
+  );
+  const hasAuditableInstallPath = hasAuditableFactoryInstallPath(text);
 
   if (
     missing.length === 0 &&
@@ -213,38 +270,18 @@ function checkWikiWorkflowGate(): {
   ) {
     return {
       status: "PASS",
-      lines: [
-        `- ${filePath} includes expected workflow markers`,
-        "- Auditable Factory Droid install path detected",
-        "- No remote pipe-to-shell installer pattern detected",
-      ],
+      lines: buildWikiWorkflowPassLines(filePath),
     };
-  }
-
-  const lines = [];
-
-  if (missing.length > 0) {
-    lines.push(`- ${filePath} is missing expected markers:`);
-    lines.push(...missing.map((marker) => `  - ${marker}`));
-  }
-
-  if (riskyPatterns.length > 0) {
-    if (lines.length > 0) lines.push("");
-    lines.push("- Unsafe remote installer patterns detected:");
-    lines.push(...riskyPatterns.map((pattern) => `  - ${pattern}`));
-  }
-
-  if (!hasAuditableInstallPath) {
-    if (lines.length > 0) lines.push("");
-    lines.push("- No pinned or vendored Factory Droid install path detected.");
-    lines.push(
-      "  - Expected a pinned npm package, pinned GitHub Action ref, or vendored installer path.",
-    );
   }
 
   return {
     status: "FAIL",
-    lines,
+    lines: buildWikiWorkflowFailureLines(
+      filePath,
+      missing,
+      riskyPatterns,
+      hasAuditableInstallPath,
+    ),
   };
 }
 

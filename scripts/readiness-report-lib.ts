@@ -16,6 +16,12 @@ type AuditCounts = {
   low: number;
 };
 
+type AuditJson = {
+  metadata?: {
+    vulnerabilities?: Partial<AuditCounts>;
+  };
+};
+
 export function normalizeExecOutput(
   output: Buffer | string | null | undefined,
 ) {
@@ -24,30 +30,112 @@ export function normalizeExecOutput(
   return "";
 }
 
-export function parseAuditCounts(jsonText: string): AuditCounts {
-  type AuditJson = {
-    metadata?: {
-      vulnerabilities?: Partial<AuditCounts>;
-    };
-  };
-
+function readAuditVulnerabilities(jsonText: string) {
   const parsed = JSON.parse(jsonText) as AuditJson;
-  const vulnerabilities = parsed.metadata?.vulnerabilities;
+  return parsed.metadata?.vulnerabilities ?? {};
+}
 
-  const critical = Number(vulnerabilities?.critical ?? 0);
-  const high = Number(vulnerabilities?.high ?? 0);
-  const moderate = Number(vulnerabilities?.moderate ?? 0);
-  const low = Number(vulnerabilities?.low ?? 0);
+function finiteNumber(value: unknown, fallback: number) {
+  const candidate = Number(value ?? fallback);
+  return Number.isFinite(candidate) ? candidate : fallback;
+}
+
+function parseSeverityCounts(vulnerabilities: Partial<AuditCounts>) {
+  return {
+    critical: finiteNumber(vulnerabilities.critical, 0),
+    high: finiteNumber(vulnerabilities.high, 0),
+    moderate: finiteNumber(vulnerabilities.moderate, 0),
+    low: finiteNumber(vulnerabilities.low, 0),
+  };
+}
+
+export function parseAuditCounts(jsonText: string): AuditCounts {
+  const vulnerabilities = readAuditVulnerabilities(jsonText);
+  const { critical, high, moderate, low } =
+    parseSeverityCounts(vulnerabilities);
   const fallbackTotal = critical + high + moderate + low;
-  const reportedTotal = Number(vulnerabilities?.total ?? fallbackTotal);
+  const reportedTotal = finiteNumber(vulnerabilities.total, fallbackTotal);
 
   return {
-    total: Number.isFinite(reportedTotal) ? reportedTotal : fallbackTotal,
+    total: reportedTotal,
     critical,
     high,
     moderate,
     low,
   };
+}
+
+function buildMissingAuditJsonSection(audit: SafeRunResult) {
+  return {
+    status: "WARN" as const,
+    lines: [
+      "- npm audit did not produce JSON output.",
+      ...(audit.error ? [`- Error: ${audit.error}`] : []),
+      ...(audit.stderr.trim() ? [`- stderr: ${audit.stderr.trim()}`] : []),
+      "- Action: run `npm audit --json` locally to inspect the raw output.",
+    ],
+  };
+}
+
+function buildUnparseableAuditJsonSection(
+  audit: SafeRunResult,
+  parseError: string,
+) {
+  return {
+    status: "WARN" as const,
+    lines: [
+      "- npm audit produced non-parseable JSON output.",
+      ...(audit.error ? [`- Error: ${audit.error}`] : []),
+      `- Parse error: ${parseError}`,
+      "- Action: run `npm audit --json` locally to inspect the raw output.",
+    ],
+  };
+}
+
+function classifyAuditStatus(
+  counts: AuditCounts,
+  auditOk: boolean,
+): SectionStatus {
+  if (counts.critical > 0 || counts.high > 0) return "FAIL";
+  if (counts.total > 0 || !auditOk) return "WARN";
+  return "PASS";
+}
+
+function buildAuditExitLines(audit: SafeRunResult) {
+  if (audit.ok) return [];
+
+  return [
+    "- npm audit exited non-zero but produced JSON output, so the readiness gate evaluated that JSON payload.",
+    ...(audit.error ? [`- Exit detail: ${audit.error}`] : []),
+    "",
+  ];
+}
+
+function buildAuditCountLines(counts: AuditCounts) {
+  return [
+    "- Vulnerability counts:",
+    `  - critical: ${counts.critical}`,
+    `  - high: ${counts.high}`,
+    `  - moderate: ${counts.moderate}`,
+    `  - low: ${counts.low}`,
+    `  - total: ${counts.total}`,
+  ];
+}
+
+function buildAuditFollowUpLines(counts: AuditCounts) {
+  if (counts.critical > 0 || counts.high > 0) {
+    return [
+      "",
+      "- Follow-up:",
+      "  - Remediate critical or high vulnerabilities or gate releases until resolved.",
+    ];
+  }
+
+  return [
+    "",
+    "- Follow-up:",
+    "  - Review moderate or low findings and plan upgrades where feasible.",
+  ];
 }
 
 export function buildAuditSection(audit: SafeRunResult): {
@@ -57,15 +145,7 @@ export function buildAuditSection(audit: SafeRunResult): {
   const jsonText = audit.stdout.trim();
 
   if (!jsonText) {
-    return {
-      status: "WARN",
-      lines: [
-        "- npm audit did not produce JSON output.",
-        ...(audit.error ? [`- Error: ${audit.error}`] : []),
-        ...(audit.stderr.trim() ? [`- stderr: ${audit.stderr.trim()}`] : []),
-        "- Action: run `npm audit --json` locally to inspect the raw output.",
-      ],
-    };
+    return buildMissingAuditJsonSection(audit);
   }
 
   let counts: AuditCounts;
@@ -74,53 +154,17 @@ export function buildAuditSection(audit: SafeRunResult): {
   } catch (err: unknown) {
     const msg =
       err instanceof Error ? err.message : "Failed to parse npm audit JSON.";
-    return {
-      status: "WARN",
-      lines: [
-        "- npm audit produced non-parseable JSON output.",
-        ...(audit.error ? [`- Error: ${audit.error}`] : []),
-        `- Parse error: ${msg}`,
-        "- Action: run `npm audit --json` locally to inspect the raw output.",
-      ],
-    };
+    return buildUnparseableAuditJsonSection(audit, msg);
   }
 
-  const status: SectionStatus =
-    counts.critical > 0 || counts.high > 0
-      ? "FAIL"
-      : counts.total > 0 || !audit.ok
-        ? "WARN"
-        : "PASS";
-
+  const status = classifyAuditStatus(counts, audit.ok);
   const lines = [
-    ...(!audit.ok
-      ? [
-          "- npm audit exited non-zero but produced JSON output, so the readiness gate evaluated that JSON payload.",
-          ...(audit.error ? [`- Exit detail: ${audit.error}`] : []),
-          "",
-        ]
-      : []),
-    "- Vulnerability counts:",
-    `  - critical: ${counts.critical}`,
-    `  - high: ${counts.high}`,
-    `  - moderate: ${counts.moderate}`,
-    `  - low: ${counts.low}`,
-    `  - total: ${counts.total}`,
+    ...buildAuditExitLines(audit),
+    ...buildAuditCountLines(counts),
   ];
 
   if (status !== "PASS") {
-    lines.push("");
-    lines.push("- Follow-up:");
-
-    if (counts.critical > 0 || counts.high > 0) {
-      lines.push(
-        "  - Remediate critical or high vulnerabilities or gate releases until resolved.",
-      );
-    } else {
-      lines.push(
-        "  - Review moderate or low findings and plan upgrades where feasible.",
-      );
-    }
+    lines.push(...buildAuditFollowUpLines(counts));
   }
 
   return { status, lines };
