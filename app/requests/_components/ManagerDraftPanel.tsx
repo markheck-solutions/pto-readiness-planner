@@ -31,6 +31,11 @@ type DraftResponse = {
   };
 };
 
+type StateSnapshot = {
+  key: string;
+  state: DraftState;
+};
+
 function resolveDraftAction(
   decision: DemoDecision,
   recommendation: DemoRecommendation,
@@ -79,6 +84,83 @@ function warningMessage(warnings: ManagerDraftWarning[]): string | null {
   return "The preview used the safe mock fallback for this request.";
 }
 
+function stateForActiveKey(snapshot: StateSnapshot, activeStateKey: string) {
+  if (snapshot.key === activeStateKey) return snapshot.state;
+  return { status: "idle" } as DraftState;
+}
+
+function draftButtonText(state: DraftState, buttonLabel: string) {
+  if (state.status === "loading") return "Generating draft...";
+  return buttonLabel;
+}
+
+function draftButtonDisabled(
+  action: ManagerDraftAction | null,
+  state: DraftState,
+) {
+  return action === null || state.status === "loading";
+}
+
+function IdleDraftHint({ state }: { state: DraftState }) {
+  if (state.status !== "idle") return null;
+
+  return (
+    <span className="text-xs text-zinc-500 dark:text-zinc-400">
+      No message is generated, sent, or saved.
+    </span>
+  );
+}
+
+function LoadingDraftPreview({ state }: { state: DraftState }) {
+  if (state.status !== "loading") return null;
+
+  return (
+    <div className="mt-4 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-3 text-sm text-zinc-700 dark:border-zinc-800 dark:bg-zinc-950/30 dark:text-zinc-300">
+      Generating draft preview...
+    </div>
+  );
+}
+
+function LoadedDraftPreview({ state }: { state: DraftState }) {
+  if (state.status !== "loaded") return null;
+
+  const fallbackMessage = warningMessage(state.warnings);
+
+  return (
+    <div className="mt-4 space-y-3">
+      {fallbackMessage ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/40 dark:text-amber-100">
+          {fallbackMessage}
+        </div>
+      ) : null}
+
+      <article
+        aria-label="Generated manager response draft"
+        className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-4 text-sm leading-7 text-zinc-800 dark:border-zinc-800 dark:bg-zinc-950/30 dark:text-zinc-200"
+      >
+        {state.draft}
+      </article>
+
+      <div className="rounded-lg border border-zinc-200 bg-white px-3 py-3 text-xs leading-5 text-zinc-600 dark:border-zinc-800 dark:bg-zinc-950/10 dark:text-zinc-400">
+        Generated draft previews remain session-only. Nothing is sent or saved.
+      </div>
+    </div>
+  );
+}
+
+function DraftErrorPreview({ state }: { state: DraftState }) {
+  if (state.status !== "error") return null;
+
+  return (
+    <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-3 text-sm text-red-900 dark:border-red-900/40 dark:bg-red-950/40 dark:text-red-100">
+      <p>Draft preview is temporarily unavailable.</p>
+      <p className="mt-1 text-xs text-red-800 dark:text-red-200">
+        {state.message}
+      </p>
+    </div>
+  );
+}
+
 export function ManagerDraftPanel({
   requestId,
   decision,
@@ -95,22 +177,13 @@ export function ManagerDraftPanel({
     [decision, recommendation],
   );
   const activeStateKey = `${requestId}:${draftAction ?? "none"}`;
-  const [stateSnapshot, setStateSnapshot] = useState<{
-    key: string;
-    state: DraftState;
-  }>({
+  const [stateSnapshot, setStateSnapshot] = useState<StateSnapshot>({
     key: activeStateKey,
     state: { status: "idle" },
   });
-  const state =
-    stateSnapshot.key === activeStateKey
-      ? stateSnapshot.state
-      : ({ status: "idle" } as DraftState);
-
+  const state = stateForActiveKey(stateSnapshot, activeStateKey);
   const buttonLabel = draftButtonLabel(draftAction);
   const helperSummary = draftSummary(draftAction);
-  const fallbackMessage =
-    state.status === "loaded" ? warningMessage(state.warnings) : null;
 
   const generateDraft = async () => {
     if (!draftAction) return;
@@ -203,55 +276,18 @@ export function ManagerDraftPanel({
         <button
           type="button"
           onClick={generateDraft}
-          disabled={!draftAction || state.status === "loading"}
+          disabled={draftButtonDisabled(draftAction, state)}
           className="inline-flex items-center justify-center rounded-full bg-zinc-950 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
         >
-          {state.status === "loading" ? "Generating draft..." : buttonLabel}
+          {draftButtonText(state, buttonLabel)}
         </button>
 
-        {state.status === "idle" ? (
-          <span className="text-xs text-zinc-500 dark:text-zinc-400">
-            No message is generated, sent, or saved.
-          </span>
-        ) : null}
+        <IdleDraftHint state={state} />
       </div>
 
-      {state.status === "loading" ? (
-        <div className="mt-4 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-3 text-sm text-zinc-700 dark:border-zinc-800 dark:bg-zinc-950/30 dark:text-zinc-300">
-          Generating draft preview...
-        </div>
-      ) : null}
-
-      {state.status === "loaded" ? (
-        <div className="mt-4 space-y-3">
-          {fallbackMessage ? (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/40 dark:text-amber-100">
-              {fallbackMessage}
-            </div>
-          ) : null}
-
-          <article
-            aria-label="Generated manager response draft"
-            className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-4 text-sm leading-7 text-zinc-800 dark:border-zinc-800 dark:bg-zinc-950/30 dark:text-zinc-200"
-          >
-            {state.draft}
-          </article>
-
-          <div className="rounded-lg border border-zinc-200 bg-white px-3 py-3 text-xs leading-5 text-zinc-600 dark:border-zinc-800 dark:bg-zinc-950/10 dark:text-zinc-400">
-            Generated draft previews remain session-only. Nothing is sent or
-            saved.
-          </div>
-        </div>
-      ) : null}
-
-      {state.status === "error" ? (
-        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-3 text-sm text-red-900 dark:border-red-900/40 dark:bg-red-950/40 dark:text-red-100">
-          <p>Draft preview is temporarily unavailable.</p>
-          <p className="mt-1 text-xs text-red-800 dark:text-red-200">
-            {state.message}
-          </p>
-        </div>
-      ) : null}
+      <LoadingDraftPreview state={state} />
+      <LoadedDraftPreview state={state} />
+      <DraftErrorPreview state={state} />
     </section>
   );
 }
