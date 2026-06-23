@@ -15,6 +15,7 @@
     "test:browser": "playwright test",
     "test:browser:smoke": "playwright test tests/browser/public-demo-smoke.spec.ts tests/browser/api-smoke.spec.ts",
     "db:seed": "tsx scripts/db-seed.ts",
+    "sql:check": "tsx scripts/sql-supportability-check.ts",
     "safety": "tsx scripts/demo-safety-scan.ts",
     "quality:check": "tsx scripts/quality-check.ts",
     "readme:verify": "tsx scripts/readme-verify.ts",

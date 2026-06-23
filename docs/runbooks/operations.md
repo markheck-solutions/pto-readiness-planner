@@ -42,10 +42,13 @@ npm run typecheck
 npm run test:coverage
 npm run build
 npm run safety
+npm run sql:check
 npm run quality:check
 npm run readme:verify
 npm run readiness-report
 ```
+
+`npm run sql:check` requires `SQL_GATE_DATABASE_URL` to point at a local or disposable Postgres database. Do not point it at production.
 
 Browser test runner:
 

@@ -74,6 +74,7 @@ describe("release hardening scaffold", () => {
       ".github/workflows/droid-wiki-refresh.yml",
     );
     expect(readinessReport).toContain("Readiness level:");
+    expect(readinessReport).toContain("SQL supportability gate");
     expect(readinessReport).toContain(
       "No remote pipe-to-shell installer pattern detected",
     );
@@ -82,5 +83,11 @@ describe("release hardening scaffold", () => {
     expect(safetyScan).toContain(".next");
     expect(safetyScan).toContain("git log");
     expect(safetyScan).toContain("commit messages");
+
+    const sqlGate = readText("scripts/sql-supportability-check.ts");
+    expect(sqlGate).toContain("SQL_GATE_DATABASE_URL");
+    expect(sqlGate).toContain("Gate implementation:");
+    expect(sqlGate).toContain("Repo SQL supportability:");
+    expect(sqlGate).toContain("SQL behavior proof:");
   });
 });
